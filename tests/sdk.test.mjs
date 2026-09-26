@@ -26,7 +26,7 @@ test('personal auth, team defaults, query encoding, and per-list override', asyn
   assert.equal(calls[1].url.searchParams.get('team_id'), 'team-override');
   assert.equal(calls[0].headers.get('authorization'), 'Bearer test-key');
   assert.equal(calls[0].headers.get('x-auth-key'), 'test-user');
-  assert.equal(calls[0].redirect, 'error');
+  assert.equal(calls[0].redirect, 'manual');
 });
 
 test('OAuth access token can be used without a personal user ID', async () => {
@@ -189,4 +189,22 @@ test('nested API errors and OAuth descriptions are readable without stringifying
     const { client } = fixture(() => json(payload, 400));
     await assert.rejects(client.sessions.retrieve('s'), error => error.code === code && error.message === message);
   }
+});
+
+test('native fetch rejects redirects without forwarding credentials to the target', async () => {
+  const { createServer } = await import('node:http');
+  const requests = [];
+  const server = createServer((request, response) => {
+    requests.push(request.url);
+    if (request.url === '/api/v1/agents') {
+      response.writeHead(302, { location: '/credential-sink' });
+      response.end();
+    } else { response.writeHead(200, { 'content-type': 'application/json' }); response.end('{"agents":[]}'); }
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const client = new Gumloop({ apiKey: 'fake-private-key', userId: 'fake-user', baseUrl: `http://127.0.0.1:${server.address().port}/api/v1` });
+    await assert.rejects(client.agents.list(), error => error instanceof GumloopError && error.status === 302);
+    assert.deepEqual(requests, ['/api/v1/agents']);
+  } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 });

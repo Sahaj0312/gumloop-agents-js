@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "gumloop-widget-studio",
+  "account_id": "c063e6cf64d48d8e1bdbb2fa26d8b254",
+  "main": "studio/worker.ts",
+  "compatibility_date": "2026-09-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "secrets": { "required": ["STUDIO_PASSWORD", "ENCRYPTION_KEY"] },
+  "triggers": { "crons": ["17 * * * *"] },
+  "assets": {
+    "directory": "studio/public",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "gumloop-widget-studio",
+    "database_id": "26457d7d-77ec-4e8e-bb66-c36284b00fe9",
+    "migrations_dir": "studio/migrations"
+  }],
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.01 }
+  }
+}

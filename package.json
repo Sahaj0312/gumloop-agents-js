@@ -4,17 +4,41 @@
   "private": true,
   "description": "Embeddable website chat and an unofficial TypeScript client for Gumloop's Agents API",
   "type": "module",
-  "engines": { "node": ">=20.12" },
-  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "engines": {
+    "node": ">=20.12"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "types": "./dist/index.d.ts",
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test tests/*.test.mjs",
     "demo": "npm run build && node examples/chat/server.mjs",
     "widget": "npm run build && node widget/server.mjs",
-    "website": "node examples/website/server.mjs"
+    "website": "node examples/website/server.mjs",
+    "studio:assets": "node scripts/build-studio.mjs",
+    "studio:types": "wrangler types studio/worker-configuration.d.ts",
+    "studio:typecheck": "npm run studio:types && tsc -p studio/tsconfig.json",
+    "studio:dev": "npm run studio:assets && wrangler dev --port 3200",
+    "studio:migrate": "wrangler d1 migrations apply gumloop-widget-studio --local",
+    "studio:deploy": "npm run studio:assets && npm run studio:typecheck && wrangler deploy"
   },
-  "devDependencies": { "@types/node": "^22.10.2", "typescript": "^5.7.2" }
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260926.1",
+    "@types/node": "^22.10.2",
+    "esbuild": "0.28.1",
+    "miniflare": "5.20260925.0-alpha",
+    "typescript": "^5.7.2",
+    "wrangler": "^4.141.0"
+  }
 }

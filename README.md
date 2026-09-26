@@ -1,8 +1,24 @@
-# Gumloop agents, on your website
+# Relay — Widget Studio for Gumloop
 
-An embeddable chat widget powered by a Gumloop agent, with a TypeScript SDK underneath. Add a script to your website to give visitors streaming answers and their own conversations.
+A visual studio for turning Gumloop agents into embeddable website chat. Pick an agent, design the widget, test a real conversation in the preview, and publish a script tag. Includes an unofficial TypeScript SDK and standalone developer examples.
 
 This is an **unofficial**, self-hosted prototype, not affiliated with or endorsed by Gumloop. It is not published to npm.
+
+## Run the studio
+
+The studio runs on Cloudflare Workers with D1 persistence. Each deployment has one password-protected owner workspace with multiple widgets. Gumloop credentials stay on the backend. Studio development requires Node.js 22 or newer.
+
+```sh
+npm install
+cp .dev.vars.example .dev.vars
+# Fill in a strong studio password, encryption key, and optional Gumloop credentials.
+npm run studio:migrate
+npm run studio:dev
+```
+
+Open **http://localhost:3200**. Sign in, connect Gumloop if needed, and create a widget from an accessible agent. Appearance edits have an interactive desktop/mobile preview. Drafts stay separate from the published design; the agent editor explicitly saves changes to the real Gumloop agent.
+
+See [studio setup and deployment](docs/studio.md). The original standalone widget and SDK examples are below.
 
 Gumloop's public JavaScript package currently exposes legacy workflow operations. Its current Agents API supports conversations, streaming, cancellations, and approvals. This project makes those operations available from TypeScript while preserving the underlying API events.
 
@@ -102,7 +118,7 @@ The test suite uses local fake transports/servers and does not spend Gumloop cre
 
 ## Scope
 
-The SDK covers Agents and sessions rather than the full Gumloop API. The widget backend provides anonymous visitor conversation ownership for one configured agent per widget. It does not verify a visitor's real-world identity, provide a SaaS control panel, or authorize access to customer accounts. Use a dedicated agent containing information and abilities appropriate for anonymous visitors.
+The SDK covers Agents and sessions rather than the full Gumloop API. Relay provides one owner workspace for designing and publishing multiple widgets, with anonymous visitor conversation ownership. It does not provide multi-customer signup or billing, verify a visitor's real-world identity, or authorize access to customer accounts. Use a dedicated agent containing information and abilities appropriate for anonymous visitors.
 
 ## API references
 

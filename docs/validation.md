@@ -1,16 +1,16 @@
 # Validation
 
-Verified on September 25, 2026.
+Updated September 26, 2026. Original SDK and standalone widget checks were performed September 25; Studio checks were performed September 26.
 
 ## Automated checks
 
 - TypeScript build and type check pass.
-- All 52 offline tests pass on Node 26.0.0. The original 31 SDK and developer-demo tests also passed on Node 22.22.3.
+- All 68 offline tests pass on Node 26.0.0, including nine Studio integration tests using real workerd and D1 with mocked Gumloop HTTP. The original 31 SDK and developer-demo tests also passed on Node 22.22.3.
 - Tests cover authentication and team scope, API routes, structured errors, approval requests, fragmented SSE and UTF-8 parsing, cursor recovery, and cancellation.
 - A local HTTP integration test verifies that disconnecting the browser closes the upstream stream without replaying the message or cancelling the task. Reconnect sends a GET with the original cursor.
 - Demo tests check origin and Host restrictions, request limits, streaming relay, and approval payloads.
 
-Run with `npm test` and `npm run typecheck`. These checks do not call Gumloop or consume credits.
+Run with `npm test`, `npm run typecheck`, and `npm run studio:typecheck`. These checks do not call Gumloop or consume credits.
 
 ## Live Gumloop checks
 
@@ -50,13 +50,31 @@ Chrome exercised the widget on a separate website origin against the real Gumloo
 
 A separate Chrome check against a mocked Gumloop client verified supported human-input forms, approval continuation, New chat, and style isolation. Widget-specific approval behavior was not separately exercised against the live API; the underlying SDK and developer-demo approval flow was.
 
+## Relay Studio checks
+
+The Studio type check and Wrangler deployment dry run pass. Nine workerd/D1 integration tests cover owner authentication and CSRF, encrypted credentials, account rotation, safe agent edits, optimistic versions, draft/publication separation, expiring previews, visitor ownership, response filtering, persistent quotas, and concurrent conversation reservations.
+
+Live API checks against both local Wrangler and the deployed Cloudflare Worker verified:
+
+- The connected account's four agents load, and a widget can be created and published using the dedicated Northstar demo agent.
+- Saving a draft leaves the public design unchanged; a stale version is rejected.
+- Preview configurations stay private to the studio origin.
+- A second visitor cannot retrieve another visitor's conversation.
+- Real incremental responses include the configured photography policies and end in a confirmed completed state.
+
+Chrome checks verified password login, the appearance editor, theme and color updates without clearing the current conversation, a 390-pixel preview, and a separate preview tab that includes unsaved cosmetic changes. A description edit was saved to the dedicated Gumloop demo agent and then restored. The install panel generated the correct snippet. No horizontal overflow or JavaScript errors were observed.
+
+The deployed widget was also embedded on a separate website origin in a fresh Chrome profile. It streamed a real answer, restored the same conversation after reload with exactly one message POST, exposed no Gumloop API key in browser requests, and fit a 390-pixel viewport.
+
+Live checks consume Gumloop credits and are intentionally separate from `npm test`. They used the dedicated fictional demo agent rather than modifying other agents in the account.
+
 ## Current limits
 
 - OAuth and team-key header behavior are covered by offline tests; live tests used a personal API key.
 - Listed-choice human input is verified. The wire format for a custom Other answer is not documented sufficiently to implement confidently; the demo explains this limitation.
 - Other approval question types have an advanced JSON fallback in the developer playground and are not all live tested. The public widget only offers supported human-input choices.
 - During recovery, the demo refreshes saved transcript snapshots rather than appending replayed deltas to existing text. Normal new-message replies stream incrementally.
-- The developer demo is a local, single-user application. The public widget separately provides anonymous visitor conversation ownership, but is a single-process prototype without customer identity verification or hosted SaaS management.
+- The developer demo remains a local, single-user application. The standalone Node widget is a single-process prototype. Relay Studio runs on Cloudflare with D1 persistence and one owner workspace; it does not implement customer identity verification or multi-customer SaaS management.
 - The client covers Agents and sessions, not the full Gumloop API.
 
 ## Optional live smoke script

@@ -44,7 +44,7 @@ class Transport {
 
   constructor(options: GumloopOptions) {
     if (options.apiKey && options.accessToken) throw new TypeError('Provide apiKey or accessToken, not both');
-    const env = typeof process === 'undefined' ? {} : process.env;
+    const env: Record<string, string | undefined> = typeof process === 'undefined' ? {} : process.env;
     const apiKey = options.apiKey ?? (!options.accessToken ? env.GUMLOOP_API_KEY : undefined);
     this.token = options.accessToken ?? apiKey ?? env.GUMLOOP_ACCESS_TOKEN ?? '';
     this.userId = options.userId ?? env.GUMLOOP_USER_ID;
@@ -55,7 +55,7 @@ class Transport {
     const streamURL = new URL(this.baseUrl);
     if (streamURL.hostname === 'api.gumloop.com') streamURL.hostname = 'ws.gumloop.com';
     this.streamBaseUrl = normalizeBase(options.streamBaseUrl ?? streamURL.href);
-    this.fetcher = options.fetch ?? globalThis.fetch;
+    this.fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
   }
 
   private async response(method: string, path: string, body: unknown, params: Params, options: RequestOptions, stream: boolean): Promise<Response> {
@@ -66,9 +66,10 @@ class Transport {
     if (this.userId) headers.set('x-auth-key', this.userId);
     if (body !== undefined) headers.set('Content-Type', 'application/json');
     // No automatic retries: repeating a POST can start another agent turn.
-    // Redirects are rejected so x-auth-key cannot leak to another host.
+    // Read redirects manually and reject them below so credentials never follow
+    // a redirect. Workers supports manual/follow but not redirect: 'error'.
     const response = await this.fetcher(url, {
-      method, headers, redirect: 'error', signal: options.signal,
+      method, headers, redirect: 'manual', signal: options.signal,
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
     if (!response.ok) {

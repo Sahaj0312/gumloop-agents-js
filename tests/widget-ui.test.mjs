@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import vm from 'node:vm';
 
 const source = await readFile(new URL('../widget/public/widget.js', import.meta.url), 'utf8');
-const helpers = vm.runInNewContext(source, { TextDecoder, Set });
+const helpers = vm.runInNewContext(source, { TextDecoder, Set, URL });
 const plain = value => JSON.parse(JSON.stringify(value));
 
 test('widget keeps public transcript text and human questions only', () => {
@@ -67,4 +67,36 @@ test('widget preserves explicit stream errors after partial text', async () => {
   assert.equal(result[0].type, 'text');
   assert.equal(result[1].type, 'error');
   assert.equal(result[1].data.message, 'Please try again later.');
+});
+
+test('widget cosmetics clamp numeric values and permit only anonymous HTTPS avatars', () => {
+  const config = helpers.cleanConfig({ width: 900, borderRadius: -2, avatarUrl: 'https://images.example/avatar.png', theme: 'dark', bubbleLabel: 'Ask the team' });
+  assert.equal(config.width, 480);
+  assert.equal(config.borderRadius, 8);
+  assert.equal(config.theme, 'dark');
+  assert.equal(config.bubbleLabel, 'Ask the team');
+  assert.equal(config.avatarUrl, 'https://images.example/avatar.png');
+  for (const avatarUrl of ['javascript:alert(1)', 'data:image/svg+xml,hi', 'http://example.com/image', 'https://user:password@example.com/image', '//example.com/image']) {
+    assert.equal(helpers.cleanConfig({ avatarUrl }).avatarUrl, '');
+  }
+  assert.equal(helpers.cleanConfig({ width: '500px', borderRadius: Infinity }).width, 384);
+  assert.equal(helpers.cleanConfig({ width: '500px', borderRadius: Infinity }).borderRadius, 18);
+  assert.equal(helpers.cleanConfig(null).title, 'Ask our team');
+});
+
+test('widget suggestions stay bounded literal text and ignore unrelated configuration', () => {
+  const config = helpers.cleanConfig({ suggestions: ['<script>hi</script>', '', null, 'x'.repeat(800), ...Array(20).fill('Hello')], agentId: 'attacker-agent', apiBase: 'https://evil.example' });
+  assert.equal(config.suggestions.length, 6);
+  assert.equal(config.suggestions[0], '<script>hi</script>');
+  assert.equal(config.suggestions[1].length, 200);
+  assert.equal(config.agentId, undefined);
+  assert.equal(config.apiBase, undefined);
+});
+
+test('preview binding accompanies every request, including public bootstrap and streaming', () => {
+  assert.deepEqual(plain(helpers.requestHeaders('visitor', 'preview-token', false, true)), { 'X-Widget-Preview': 'preview-token' });
+  assert.deepEqual(plain(helpers.requestHeaders('visitor', 'preview-token', true, false)), {
+    Authorization: 'Bearer visitor', 'X-Widget-Preview': 'preview-token', 'Content-Type': 'application/json',
+  });
+  assert.deepEqual(plain(helpers.requestHeaders('visitor', '', false, false)), { Authorization: 'Bearer visitor' });
 });

@@ -7,3 +7,9 @@ coverage/
 .DS_Store
 *.log
 .local/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.wrangler/
+studio/public/widget.js
+studio/worker-configuration.d.ts
