@@ -1,10 +1,43 @@
-# Gumloop Agents for TypeScript
+# Gumloop agents, on your website
 
-An **unofficial** Node.js client for Gumloop's current Agents API, with a local chat demo. Written as a focused contribution prototype; not affiliated with or endorsed by Gumloop. Not published to npm.
+An embeddable chat widget powered by a Gumloop agent, with a TypeScript SDK underneath. Add a script to your website to give visitors streaming answers and their own conversations.
+
+This is an **unofficial**, self-hosted prototype, not affiliated with or endorsed by Gumloop. It is not published to npm.
 
 Gumloop's public JavaScript package currently exposes legacy workflow operations. Its current Agents API supports conversations, streaming, cancellations, and approvals. This project makes those operations available from TypeScript while preserving the underlying API events.
 
-## Run the chat demo
+## Try the website widget
+
+Requires Node.js 20.12 or newer and a Gumloop account with API access.
+
+```sh
+npm install
+cp .env.example .env
+# Fill in your API key, user ID, and the ID of an agent intended for visitors.
+npm run widget
+```
+
+In another terminal:
+
+```sh
+npm run website
+```
+
+Open **http://127.0.0.1:3100**. The fictional Northstar Studio website loads the chat bubble from a separate server on port 3001 using one script tag. The agent and sample policies must be configured in your own Gumloop account; the example does not create or train an agent automatically.
+
+For your own website, host the widget backend and install:
+
+```html
+<script
+  src="https://your-widget-server.example/widget.js"
+  data-widget-id="demo"
+  defer
+></script>
+```
+
+Allow your website's exact origin in the backend configuration. Your Gumloop key stays on the backend; the snippet contains no credentials. Set the title, greeting, and accent color through environment variables. See [widget setup](docs/widget.md) for configuration, visitor isolation, usage limits, and deployment boundaries.
+
+## Run the developer playground
 
 Requires Node.js 20.12 or newer and a Gumloop account with API access.
 
@@ -69,7 +102,7 @@ The test suite uses local fake transports/servers and does not spend Gumloop cre
 
 ## Scope
 
-This is a focused Agents/session client, not full parity with Gumloop's Python SDK. It does not implement legacy workflows, host agent execution, or provide an authentication system for public websites. Production embedding needs your own user authentication and authorization to decide who can invoke which agent and access which conversation.
+The SDK covers Agents and sessions rather than the full Gumloop API. The widget backend provides anonymous visitor conversation ownership for one configured agent per widget. It does not verify a visitor's real-world identity, provide a SaaS control panel, or authorize access to customer accounts. Use a dedicated agent containing information and abilities appropriate for anonymous visitors.
 
 ## API references
 
