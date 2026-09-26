@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Gumloop Agents · TypeScript playground</title>
+  <link rel="stylesheet" href="/style.css"><script type="module" src="/app.js"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="/"><span class="mark">g.</span><span>Gumloop<span class="brand-sub">AGENTS PLAYGROUND</span></span></a>
+    <div class="sidebar-content">
+      <div class="eyebrow">YOUR WORKSPACE</div>
+      <label for="agent">Choose an agent</label>
+      <select id="agent" disabled><option>Loading agents…</option></select>
+      <button id="new" class="secondary" disabled><span>＋</span> New conversation</button>
+      <div class="session-card"><span class="eyebrow">CURRENT SESSION</span><p id="session-id">No session yet</p><div class="state-row"><i id="state-dot"></i><span id="state">Ready</span></div></div>
+      <div class="tools"><button id="refresh" disabled>↻ Refresh status</button><button id="reconnect" disabled>↗ Reconnect stream</button></div>
+      <p class="hint">Reconnect listens to the existing run. It never resends your message.</p>
+    </div>
+    <footer><span class="local-dot"></span> Running locally <span class="footer-line">Unofficial SDK demo · Keys stay on the server</span></footer>
+  </aside>
+  <main>
+    <header><div><span class="eyebrow">TYPESCRIPT × GUMLOOP</span><h1 id="title">Your agents, in your app.</h1></div><span class="tag">SDK playground</span></header>
+    <div id="notice" role="status" hidden></div>
+    <section id="messages" aria-label="Conversation" aria-live="polite"><div class="welcome"><div class="welcome-icon">✳</div><h2>A conversation starts here.</h2><p>Pick a Gumloop agent and send a message.<br>See responses arrive, handle approvals, and stay in control.</p><div class="capabilities"><span>Streaming</span><span>Approvals</span><span>Recovery</span></div></div></section>
+    <section id="approvals" aria-label="Pending approvals" hidden></section>
+    <div class="composer-area"><form id="composer"><label class="sr-only" for="input">Message your agent</label><textarea id="input" rows="2" placeholder="Message your agent…" maxlength="32000" disabled></textarea><div class="composer-bottom"><span id="transport">Choose an agent to begin</span><div><button type="button" id="stop" class="stop" hidden>■ Stop run</button><button id="send" type="submit" disabled>Send <span>↑</span></button></div></div></form><p class="composer-hint">Enter to send · Shift + Enter for a new line · Runs use your Gumloop credits</p></div>
+    <details class="inspector"><summary>Event inspector <span id="event-count">0 events</span></summary><pre id="events">Waiting for events…</pre></details>
+  </main>
+</body>
+</html>
