@@ -6,7 +6,6 @@
   "compatibility_date": "2026-09-26",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
-  "secrets": { "required": ["STUDIO_PASSWORD", "ENCRYPTION_KEY"] },
   "triggers": { "crons": ["17 * * * *"] },
   "assets": {
     "directory": "studio/public",

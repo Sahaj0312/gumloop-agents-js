@@ -4,9 +4,11 @@ A visual studio for turning Gumloop agents into embeddable website chat. Pick an
 
 This is an **unofficial**, self-hosted prototype, not affiliated with or endorsed by Gumloop. It is not published to npm.
 
+**[Open the hosted studio](https://gumloop-widget-studio.sahaj0091.workers.dev)** to create a private workspace with your own Gumloop API key and user ID. Save the generated workspace access code to sign in again later.
+
 ## Run the studio
 
-The studio runs on Cloudflare Workers with D1 persistence. Each deployment has one password-protected owner workspace with multiple widgets. Gumloop credentials stay on the backend. Studio development requires Node.js 22 or newer.
+The studio runs on Cloudflare Workers with D1 persistence. Visitors can create private workspaces using their own Gumloop key and user ID, then return with a generated workspace access code. Gumloop credentials stay on the backend. Studio development requires Node.js 22 or newer.
 
 ```sh
 npm install
@@ -16,9 +18,9 @@ npm run studio:migrate
 npm run studio:dev
 ```
 
-Open **http://localhost:3200**. Sign in, connect Gumloop if needed, and create a widget from an accessible agent. Appearance edits have an interactive desktop/mobile preview. Drafts stay separate from the published design; the agent editor explicitly saves changes to the real Gumloop agent.
+Open **http://localhost:3200**. Create a workspace, save its access code, and create a widget from an accessible agent. Appearance edits have an interactive desktop/mobile preview. Drafts stay separate from the published design; the agent editor explicitly saves changes to the real Gumloop agent.
 
-See [studio setup and deployment](docs/studio.md). The original standalone widget and SDK examples are below.
+See [studio setup and deployment](docs/studio.md) and [architecture and credential storage](docs/architecture.md). The original standalone widget and SDK examples are below.
 
 Gumloop's public JavaScript package currently exposes legacy workflow operations. Its current Agents API supports conversations, streaming, cancellations, and approvals. This project makes those operations available from TypeScript while preserving the underlying API events.
 
@@ -118,7 +120,7 @@ The test suite uses local fake transports/servers and does not spend Gumloop cre
 
 ## Scope
 
-The SDK covers Agents and sessions rather than the full Gumloop API. Relay provides one owner workspace for designing and publishing multiple widgets, with anonymous visitor conversation ownership. It does not provide multi-customer signup or billing, verify a visitor's real-world identity, or authorize access to customer accounts. Use a dedicated agent containing information and abilities appropriate for anonymous visitors.
+The SDK covers Agents and sessions rather than the full Gumloop API. Relay provides separate private workspaces for designing and publishing widgets, with anonymous visitor conversation ownership. It does not provide email-based account recovery or billing, verify a visitor's real-world identity, or authorize access to customer accounts. Use a dedicated agent containing information and abilities appropriate for anonymous visitors.
 
 ## API references
 

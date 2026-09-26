@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-const state = { agents: [], widgets: [], widget: null, agent: null, view: 'widgets', tab: 'appearance', csrf: null, dirty: false, agentDirty: false, saving: false, previewUrl: null, previewGeneration: 0, previewTimer: null, noticeTimer: null };
+const state = { agents: [], widgets: [], widget: null, agent: null, view: 'widgets', tab: 'appearance', csrf: null, dirty: false, agentDirty: false, saving: false, previewUrl: null, previewGeneration: 0, previewTimer: null, noticeTimer: null, workspace: null, account: null, connected: false, onboardingCode: null, workspaceGeneration: 0 };
 const configFields = ['title', 'welcome', 'accent', 'position', 'bubbleLabel', 'theme', 'borderRadius', 'width', 'avatarUrl'];
 const controls = Object.fromEntries(configFields.map(key => [key, document.querySelector(`[data-config="${key}"]`)]));
 const clone = value => JSON.parse(JSON.stringify(value));
@@ -28,7 +28,7 @@ async function api(path, { method = 'GET', body } = {}) {
   let result;
   try { result = await response.json(); } catch { throw new Error('The studio returned an unexpected response. Please try again.'); }
   if (!response.ok) {
-    if (response.status === 401 && path !== '/login') showAuth('login');
+    if (response.status === 401 && !['/login', '/signup'].includes(path)) showAuth('login');
     const error = new Error(result.error || 'Something went wrong. Please try again.');
     error.status = response.status;
     throw error;
@@ -38,22 +38,91 @@ async function api(path, { method = 'GET', body } = {}) {
 function setFormBusy(form, busy) {
   for (const button of form.querySelectorAll('button[type=submit]')) button.disabled = busy;
 }
-function showAuth(mode) {
+function showAuth(mode = 'signup') {
   $('auth-view').hidden = false; $('studio').hidden = true;
-  $('login-form').hidden = mode !== 'login'; $('connect-form').hidden = mode !== 'connect';
-  $('auth-eyebrow').textContent = mode === 'connect' ? 'LET’S MAKE THE CONNECTION' : 'YOUR WORKSPACE';
-  $('auth-title').textContent = mode === 'connect' ? 'Bring your agents.' : 'Welcome back.';
-  $('auth-copy').textContent = mode === 'connect' ? 'Connect your Gumloop account to start building widgets with the agents you already have.' : 'Enter your studio password to pick up where you left off.';
+  for (const name of ['signup', 'login', 'connect']) $(`${name}-form`).hidden = mode !== name;
+  $('access-code-panel').hidden = mode !== 'code';
+  $('auth-tabs').hidden = !['signup', 'login'].includes(mode);
+  for (const button of document.querySelectorAll('[data-auth]')) button.setAttribute('aria-selected', String(button.dataset.auth === mode));
+  const copy = {
+    signup: ['YOUR AGENTS. YOUR OWN SPACE.', 'Make yourself at home.', 'Connect your Gumloop account to create a private workspace for your agents and website widgets.'],
+    login: ['YOUR WORKSPACE, RIGHT WHERE YOU LEFT IT', 'Welcome back.', 'Use your saved access code to return to your own workspace.'],
+    connect: ['LET’S MAKE THE CONNECTION', 'Bring your agents.', 'Connect your Gumloop account to start building widgets with the agents you already have.'],
+    code: ['ONE LAST THING BEFORE YOU GO IN', 'Keep your way back.', 'Save this code now. It is your private key to this workspace, and we won’t show it again.'],
+  }[mode];
+  $('auth-eyebrow').textContent = copy[0]; $('auth-title').textContent = copy[1]; $('auth-copy').textContent = copy[2];
   formError('auth-error', '');
 }
+for (const button of document.querySelectorAll('[data-auth]')) button.addEventListener('click', () => showAuth(button.dataset.auth));
+function updateWorkspaceIdentity(me) {
+  if (state.workspace?.id !== me.workspace?.id) state.workspaceGeneration++;
+  state.workspace = me.workspace || { name: 'Your workspace' };
+  state.account = me.account || null; state.connected = me.connected === true;
+  const name = state.workspace.name || 'Your workspace';
+  $('workspace-label').textContent = name;
+  $('settings-workspace-name').textContent = name;
+  $('settings-access-copy').textContent = state.workspace.isOwner ? 'Use your original studio password in the Existing workspace tab to sign in again. Keep it in your password manager.' : 'Keep your workspace access code in your password manager. Use it in the Existing workspace tab to sign in again.';
+  const initials = name.trim().slice(0, 1).toUpperCase() || 'W';
+  document.querySelector('.workspace-avatar').textContent = initials; document.querySelector('.owner-avatar').textContent = initials;
+  $('workspace-connection-label').textContent = state.connected ? 'Connected to Gumloop' : 'Gumloop disconnected';
+  $('rail-connection-status').textContent = state.connected ? 'Gumloop connected' : 'Gumloop disconnected';
+  document.querySelector('.workspace-switch').classList.toggle('disconnected', !state.connected);
+  document.querySelector('.connection-status').classList.toggle('disconnected', !state.connected);
+  $('connected-user-id').value = state.account?.userId || '';
+  $('connected-user-id').readOnly = state.connected && Boolean(state.account?.userId);
+  $('connected-user-id').required = true;
+  $('user-id-hint').textContent = state.connected ? 'This workspace stays linked to this Gumloop account.' : 'Enter the same Gumloop user ID previously connected to this workspace.';
+  $('settings-connected-badge').textContent = state.connected ? 'Connected' : 'Disconnected';
+  $('settings-connected-badge').className = state.connected ? 'badge live' : 'badge';
+  $('settings-connection-copy').textContent = state.connected ? 'Your agents run through this account.' : 'Reconnect to use your agents and publish your widgets again.';
+  $('rotation-key-label').textContent = state.connected ? 'New API key' : 'Gumloop API key';
+  $('rotate-key-button').replaceChildren(document.createTextNode(state.connected ? 'Update API key ' : 'Reconnect Gumloop '), element('span', '', '↗'));
+  $('disconnect-account').disabled = !state.connected;
+  $('create-widget').disabled = !state.connected; $('create-first').disabled = !state.connected;
+}
 async function bootstrap() {
+  if (state.onboardingCode) return;
   const me = await api('/me');
   state.csrf = me.csrfToken || null;
-  if (!me.authenticated) { showAuth('login'); return; }
-  if (!me.connected) { showAuth('connect'); return; }
+  if (!me.authenticated) { showAuth('signup'); return; }
+  updateWorkspaceIdentity(me);
   $('auth-view').hidden = true; $('studio').hidden = false;
   await loadWorkspace();
+  if (!state.connected) showView('settings');
 }
+$('signup-form').addEventListener('submit', async event => {
+  event.preventDefault(); setFormBusy(event.currentTarget, true); formError('auth-error', '');
+  try {
+    const result = await api('/signup', { method: 'POST', body: { name: $('workspace-name').value.trim(), apiKey: $('signup-api-key').value.trim(), userId: $('signup-user-id').value.trim() } });
+    $('signup-api-key').value = ''; $('signup-user-id').value = ''; $('workspace-name').value = '';
+    if (typeof result.accessCode !== 'string' || !result.accessCode) throw new Error('Your workspace was created, but its access code was not returned. Keep this page open and contact the studio administrator.');
+    state.workspaceGeneration++; state.workspace = result.workspace; state.onboardingCode = result.accessCode;
+    $('access-code').textContent = result.accessCode; $('access-code-saved').checked = false; $('finish-onboarding').disabled = true;
+    $('access-code-status').textContent = 'Shown only on this page. Save it in your password manager or download it before continuing.';
+    showAuth('code');
+  } catch (error) { formError('auth-error', error.message); }
+  finally { setFormBusy($('signup-form'), false); }
+});
+$('copy-access-code').addEventListener('click', async () => {
+  if (!state.onboardingCode) return;
+  try { await navigator.clipboard.writeText(state.onboardingCode); $('access-code-status').textContent = 'Copied. Save this code somewhere safe before continuing.'; }
+  catch { const selection = window.getSelection(); const range = document.createRange(); range.selectNodeContents($('access-code')); selection.removeAllRanges(); selection.addRange(range); $('access-code-status').textContent = 'Copy the highlighted code and save it somewhere safe.'; }
+});
+$('download-access-code').addEventListener('click', () => {
+  if (!state.onboardingCode) return;
+  const content = `Relay workspace access\n\nWorkspace: ${state.workspace?.name || 'Your workspace'}\nStudio: ${location.origin}\nAccess code: ${state.onboardingCode}\n\nUse the Existing workspace tab to sign in with this code.\nKeep it private. It grants access to this workspace and is not your Gumloop API key.\n`;
+  const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }));
+  const link = document.createElement('a'); link.href = url; link.download = 'relay-workspace-access.txt'; document.body.append(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  $('access-code-status').textContent = 'Download started. Keep the access file somewhere private.';
+});
+$('access-code-saved').addEventListener('change', () => { $('finish-onboarding').disabled = !$('access-code-saved').checked; });
+$('finish-onboarding').addEventListener('click', async () => {
+  if (!$('access-code-saved').checked || !state.onboardingCode) return;
+  state.onboardingCode = null; $('access-code').textContent = ''; $('access-code-saved').checked = false; $('finish-onboarding').disabled = true;
+  window.getSelection()?.removeAllRanges(); showAuth('login');
+  try { await bootstrap(); } catch (error) { formError('auth-error', error.message); }
+});
 $('login-form').addEventListener('submit', async event => {
   event.preventDefault(); setFormBusy(event.currentTarget, true); formError('auth-error', '');
   try { await api('/login', { method: 'POST', body: { password: $('password').value } }); $('password').value = ''; await bootstrap(); }
@@ -66,18 +135,54 @@ $('connect-form').addEventListener('submit', async event => {
   catch (error) { formError('auth-error', error.message); }
   finally { setFormBusy($('connect-form'), false); }
 });
-$('logout').addEventListener('click', async () => {
+async function logout() {
   if (!confirmLeave()) return;
-  try { await api('/logout', { method: 'POST', body: {} }); state.csrf = null; state.widget = null; state.agent = null; $('preview-frame').src = 'about:blank'; showAuth('login'); }
-  catch (error) { notice(error.message, true); }
+  try {
+    await api('/logout', { method: 'POST', body: {} });
+    clearTimeout(state.previewTimer); clearTimeout(state.noticeTimer); state.previewGeneration++; state.workspaceGeneration++;
+    state.csrf = null; state.widget = null; state.agent = null; state.agents = []; state.widgets = []; state.workspace = null; state.account = null; state.connected = false; state.dirty = false; state.agentDirty = false; state.previewUrl = null;
+    $('preview-frame').src = 'about:blank';
+    for (const id of ['rotation-api-key', 'connected-user-id', 'signup-api-key', 'signup-user-id', 'api-key', 'user-id', 'password']) $(id).value = '';
+    state.onboardingCode = null; $('access-code').textContent = ''; $('access-code-saved').checked = false;
+    for (const input of document.querySelectorAll('#agent-tab input, #agent-tab textarea')) input.value = '';
+    $('widget-grid').replaceChildren(); $('agent-grid').replaceChildren(); notice(''); showAuth('login');
+  } catch (error) { notice(error.message, true); }
+}
+$('logout').addEventListener('click', logout);
+$('switch-workspace').addEventListener('click', logout);
+$('rotate-key-form').addEventListener('submit', async event => {
+  event.preventDefault(); setFormBusy(event.currentTarget, true); $('rotation-status').textContent = '';
+  const wasConnected = state.connected;
+  try {
+    await api('/connection', { method: 'POST', body: { apiKey: $('rotation-api-key').value.trim(), userId: $('connected-user-id').value.trim() } });
+    $('rotation-api-key').value = '';
+    const me = await api('/me'); updateWorkspaceIdentity(me);
+    await loadWorkspace(); showView('settings');
+    $('rotation-status').textContent = wasConnected ? 'API key updated. Your existing widgets remain linked.' : 'Gumloop reconnected. Publish your widgets again when you’re ready.';
+    notice(wasConnected ? 'Gumloop API key updated.' : 'Gumloop reconnected.');
+  } catch (error) { $('rotation-status').textContent = error.message; notice(error.message, true); }
+  finally { setFormBusy($('rotate-key-form'), false); }
+});
+$('disconnect-account').addEventListener('click', async () => {
+  if (!window.confirm('Disconnect Gumloop? Your public widgets will stop working and will be unpublished. Your widgets and drafts stay in this workspace. You can reconnect to the same account and publish them again later.')) return;
+  $('disconnect-account').disabled = true;
+  try {
+    await api('/disconnect', { method: 'POST', body: {} });
+    $('rotation-api-key').value = ''; $('rotation-status').textContent = '';
+    const me = await api('/me'); updateWorkspaceIdentity(me);
+    await loadWorkspace(); showView('settings');
+    notice('Gumloop disconnected. Public widgets are stopped; your drafts are retained.');
+  } catch (error) { notice(error.message, true); $('disconnect-account').disabled = !state.connected; }
 });
 
 async function loadWorkspace() {
-  const results = await Promise.allSettled([api('/widgets'), api('/agents')]);
+  const generation = state.workspaceGeneration;
+  const results = await Promise.allSettled([api('/widgets'), state.connected ? api('/agents') : Promise.resolve({ agents: [] })]);
+  if (generation !== state.workspaceGeneration) return;
   if (results[0].status === 'fulfilled') state.widgets = results[0].value.widgets || [];
-  else notice(results[0].reason.message, true);
+  else { state.widgets = []; notice(results[0].reason.message, true); }
   if (results[1].status === 'fulfilled') state.agents = results[1].value.agents || [];
-  else notice(results[1].reason.message, true);
+  else { state.agents = []; notice(results[1].reason.message, true); }
   renderDashboard(); renderAgents();
   showView('widgets');
 }
@@ -86,9 +191,9 @@ function confirmLeave() {
 }
 function showView(view) {
   state.view = view;
-  $('dashboard').hidden = view !== 'widgets'; $('agents-page').hidden = view !== 'agents'; $('editor').hidden = view !== 'editor';
+  $('dashboard').hidden = view !== 'widgets'; $('agents-page').hidden = view !== 'agents'; $('editor').hidden = view !== 'editor'; $('settings-page').hidden = view !== 'settings';
   document.querySelectorAll('.nav-item').forEach(button => button.classList.toggle('active', button.dataset.view === (view === 'editor' ? 'widgets' : view)));
-  $('breadcrumb').replaceChildren(document.createTextNode('Workspace '), element('span', '', '/'), document.createTextNode(view === 'agents' ? ' Agents' : view === 'editor' ? ' Widget editor' : ' Widgets'));
+  $('breadcrumb').replaceChildren(document.createTextNode(`${state.workspace?.name || 'Workspace'} `), element('span', '', '/'), document.createTextNode(view === 'agents' ? ' Agents' : view === 'editor' ? ' Widget editor' : view === 'settings' ? ' Settings' : ' Widgets'));
 }
 for (const button of document.querySelectorAll('.nav-item')) button.addEventListener('click', () => {
   if (state.view === 'editor' && !confirmLeave()) return;
@@ -127,7 +232,7 @@ function renderAgents() {
   const query = $('agent-search').value.trim().toLowerCase();
   const agents = state.agents.filter(agent => `${agent.name || ''} ${agent.description || ''}`.toLowerCase().includes(query));
   $('agent-grid').replaceChildren(); $('agents-empty').hidden = agents.length > 0;
-  $('agents-empty').textContent = state.agents.length ? 'No agents match your search.' : 'No agents found. Create an agent in Gumloop, then refresh this page.';
+  $('agents-empty').textContent = !state.connected ? 'Reconnect Gumloop in Settings to load your agents.' : state.agents.length ? 'No agents match your search.' : 'No agents found. Create an agent in Gumloop, then refresh this page.';
   for (const agent of agents) {
     const card = element('article', 'agent-card'); const button = element('button', 'button secondary', 'Create a widget ↗'); button.addEventListener('click', () => openCreate(agent.id));
     card.append(element('span', 'agent-icon', '✳'), element('h3', '', agent.name || 'Unnamed agent'), element('p', '', agent.description || 'Ready to connect to a website widget.'), element('span', 'model-label', agent.model_name || 'Model configured in Gumloop'), button); $('agent-grid').append(card);
@@ -135,6 +240,7 @@ function renderAgents() {
 }
 $('agent-search').addEventListener('input', renderAgents);
 function openCreate(agentId) {
+  if (!state.connected) { showView('settings'); notice('Connect Gumloop before creating a widget.'); return; }
   formError('create-error', ''); $('new-agent').replaceChildren();
   for (const agent of state.agents) { const option = element('option', '', agent.name || 'Unnamed agent'); option.value = agent.id; $('new-agent').append(option); }
   if (agentId) $('new-agent').value = agentId;
@@ -157,12 +263,15 @@ $('create-form').addEventListener('submit', async event => {
 });
 
 async function openEditor(id) {
+  const generation = state.workspaceGeneration;
   if (state.view === 'editor' && !confirmLeave()) return;
   try {
     const result = await api(`/widgets/${encodeURIComponent(id)}`);
+    if (generation !== state.workspaceGeneration) return;
     state.widget = result.widget; state.agent = null; state.dirty = false; state.agentDirty = false;
     fillWidget(); showView('editor'); selectTab('appearance'); notice('');
-    await Promise.allSettled([loadAgent(result.widget.agentId), createPreview()]);
+    if (state.connected) await Promise.allSettled([loadAgent(result.widget.agentId), createPreview()]);
+    else { $('save-agent').disabled = true; $('agent-save-status').textContent = 'Reconnect Gumloop in Settings to edit this agent.'; $('preview-frame').src = 'about:blank'; $('preview-loading').hidden = false; $('preview-loading').querySelector('p').textContent = 'Reconnect Gumloop in Settings to preview this widget.'; $('retry-preview').hidden = true; }
   } catch (error) { notice(error.message, true); }
 }
 function fillWidget() {
@@ -206,7 +315,7 @@ function updateEditorState() {
   $('editor-status').textContent = widget.status === 'published' ? 'Published' : 'Draft'; $('editor-status').className = widget.status === 'published' ? 'badge live' : 'badge';
   $('save-status').textContent = state.saving ? 'Saving…' : state.dirty ? 'Unsaved changes' : 'All changes saved';
   $('save-draft').disabled = state.saving || !state.dirty;
-  $('publish').disabled = state.saving;
+  $('publish').disabled = state.saving || !state.connected;
   for (const input of document.querySelectorAll('#appearance-tab input, #appearance-tab textarea, #appearance-tab select, #allowed-origins')) input.disabled = state.saving;
   $('publish').replaceChildren(document.createTextNode(widget.status === 'published' ? 'Publish changes ' : 'Publish widget '), element('span', '', '↗'));
   $('unpublish').hidden = widget.status !== 'published';
@@ -283,11 +392,12 @@ for (const input of document.querySelectorAll('#agent-tab input, #agent-tab text
   $('agent-save-status').textContent = state.agentDirty ? 'Unsaved agent changes. Use Save agent changes to update Gumloop.' : 'Agent changes are never saved automatically.';
 });
 async function loadAgent(id) {
+  const generation = state.workspaceGeneration;
   $('save-agent').disabled = true; $('agent-save-status').textContent = 'Loading agent from Gumloop…';
   for (const input of document.querySelectorAll('#agent-tab input, #agent-tab textarea')) input.disabled = true;
   try {
     const result = await api(`/agents/${encodeURIComponent(id)}`);
-    if (state.widget?.agentId !== id) return;
+    if (generation !== state.workspaceGeneration || state.widget?.agentId !== id) return;
     state.agent = result.agent; state.agentDirty = false;
     $('linked-agent-name').textContent = result.agent.name || 'Unnamed agent';
     $('agent-name').value = result.agent.name || ''; $('agent-description').value = result.agent.description || ''; $('agent-model').value = result.agent.model_name || ''; $('agent-instructions').value = result.agent.system_prompt || '';
@@ -321,7 +431,7 @@ $('save-agent').addEventListener('click', async () => {
 });
 
 async function createPreview() {
-  if (!state.widget) return;
+  if (!state.widget || !state.connected) return;
   const generation = ++state.previewGeneration;
   clearTimeout(state.previewTimer);
   state.previewUrl = null; $('preview-loading').hidden = false; $('preview-loading').querySelector('p').textContent = 'Preparing your preview…'; $('retry-preview').hidden = true; $('preview-open').disabled = true; $('open-chat').disabled = true;
@@ -366,5 +476,5 @@ $('preview-open').addEventListener('click', async () => {
   } catch (error) { tab.close(); notice(error.message, true); }
 });
 $('open-chat').addEventListener('click', () => $('preview-frame').contentWindow?.postMessage({ type: 'relay:open' }, location.origin));
-window.addEventListener('beforeunload', event => { if (state.dirty || state.agentDirty) { event.preventDefault(); event.returnValue = ''; } });
+window.addEventListener('beforeunload', event => { if (state.dirty || state.agentDirty || state.onboardingCode) { event.preventDefault(); event.returnValue = ''; } });
 bootstrap().catch(error => { formError('auth-error', error.message); });

@@ -27,7 +27,7 @@
     "widget": "npm run build && node widget/server.mjs",
     "website": "node examples/website/server.mjs",
     "studio:assets": "node scripts/build-studio.mjs",
-    "studio:types": "wrangler types studio/worker-configuration.d.ts",
+    "studio:types": "wrangler types studio/worker-configuration.d.ts --env-file .dev.vars.example",
     "studio:typecheck": "npm run studio:types && tsc -p studio/tsconfig.json",
     "studio:dev": "npm run studio:assets && wrangler dev --port 3200",
     "studio:migrate": "wrangler d1 migrations apply gumloop-widget-studio --local",

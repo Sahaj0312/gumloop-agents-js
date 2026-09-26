@@ -8,8 +8,8 @@ const origin = 'https://studio.test';
 const site = 'https://website.test';
 const password = 'test-owner-password-that-is-not-a-real-secret';
 const bundle = await build({ entryPoints: ['studio/worker.ts'], bundle: true, format: 'esm', platform: 'browser', target: 'es2022', write: false });
-const migration = await readFile(new URL('../studio/migrations/0001_studio.sql', import.meta.url), 'utf8');
-async function setup(t) {
+const migrations = await Promise.all(['0001_studio.sql', '0002_workspaces.sql'].map(name => readFile(new URL(`../studio/migrations/${name}`, import.meta.url), 'utf8')));
+async function setup(t, { beforeWorkspaceMigration, beforeUpstream } = {}) {
   const upstream = [];
   const sessions = new Map();
   let counter = 0;
@@ -18,7 +18,9 @@ async function setup(t) {
     bindings: { STUDIO_PASSWORD: password, ENCRYPTION_KEY: 'a'.repeat(64), GUMLOOP_API_KEY: 'test-upstream-key', GUMLOOP_USER_ID: 'test-upstream-user' },
     serviceBindings: { ASSETS: () => new Response('<!doctype html><title>Studio</title>', { headers: { 'content-type': 'text/html' } }) },
     outboundService: async request => {
-      const url = new URL(request.url); const path = url.pathname.slice('/api/v1'.length); const data = request.method === 'GET' ? undefined : await request.json(); upstream.push({ path, method: request.method, data });
+      await beforeUpstream?.(request);
+      const url = new URL(request.url); const path = url.pathname.slice('/api/v1'.length); const data = request.method === 'GET' ? undefined : await request.json(); upstream.push({ path, method: request.method, data, credential: request.headers.get('authorization'), userId: request.headers.get('x-auth-key') });
+      if (request.headers.get('authorization') === 'Bearer invalid-test-key') return Response.json({ error: 'Invalid key' }, { status: 401 });
       if (path === '/agents') return Response.json({ agents: [agent] });
       if (path === '/models') return Response.json({ models: [{ id: 'test-model', name: 'Test' }] });
       if (path === '/agents/agent-private') { if (request.method === 'PATCH') Object.assign(agent, data); return Response.json({ agent }); }
@@ -39,10 +41,13 @@ async function setup(t) {
   }));
   t.after(() => mf.dispose());
   const db = await mf.getD1Database('DB');
-  for (const statement of migration.split(';').map(value => value.trim()).filter(Boolean)) await db.prepare(statement).run();
+  for (let index = 0; index < migrations.length; index++) {
+    if (index === 1) await beforeWorkspaceMigration?.(db);
+    for (const statement of migrations[index].split(';').map(value => value.trim()).filter(Boolean)) await db.prepare(statement).run();
+  }
   let cookie = '';
-  async function request(path, { method = 'GET', body, auth = true, origin: requestedOrigin = origin, token, preview, sameSite = false } = {}) {
-    const response = await mf.dispatchFetch(origin + path, { method, headers: { ...(requestedOrigin ? { Origin: requestedOrigin } : {}), ...(sameSite ? { 'Sec-Fetch-Site': 'same-origin' } : {}), ...(auth && cookie ? { Cookie: cookie } : {}), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(preview ? { 'X-Widget-Preview': preview } : {}) }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
+  async function request(path, { method = 'GET', body, auth = true, origin: requestedOrigin = origin, token, preview, sameSite = false, cookieOverride } = {}) {
+    const response = await mf.dispatchFetch(origin + path, { method, headers: { ...(requestedOrigin ? { Origin: requestedOrigin } : {}), ...(sameSite ? { 'Sec-Fetch-Site': 'same-origin' } : {}), ...(auth && (cookieOverride ?? cookie) ? { Cookie: cookieOverride ?? cookie } : {}), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(preview ? { 'X-Widget-Preview': preview } : {}) }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
     return response;
   }
   async function login() { const response = await request('/api/studio/login', { method: 'POST', body: { password } }); assert.equal(response.status, 200, await response.clone().text()); cookie = response.headers.get('set-cookie').split(';')[0]; return response; }
@@ -159,7 +164,7 @@ test('rate quotas persist across requests, reject excess requests and record rea
   for (let count = 0; count < 20; count++) await app.visitor(widget.id);
   const limited = await app.request(`/v1/widgets/${widget.id}/visitors`, { method: 'POST', origin: site, body: {} });
   assert.equal(limited.status, 429); assert.equal(limited.headers.get('retry-after'), '60');
-  const row = await app.db.prepare("SELECT expires_at,count FROM quotas WHERE scope LIKE 'bootstrap:%'").first();
+  const row = await app.db.prepare("SELECT expires_at,count FROM quotas WHERE scope LIKE '%:bootstrap:%'").first();
   assert.equal(row.count, 21); assert.ok(row.expires_at > Date.now()); assert.ok(row.expires_at <= Date.now() + 60000);
 });
 
@@ -173,4 +178,124 @@ test('configuration validation rejects unsafe appearance and malformed allowed o
   }
   const asset = await app.request('/preview.html?token=public-preview-placeholder');
   assert.equal(asset.headers.get('referrer-policy'), 'no-referrer'); assert.equal(asset.headers.get('cache-control'), 'no-store'); assert.match(asset.headers.get('content-security-policy'), /frame-ancestors 'self'/);
+});
+
+async function signup(app, name = 'Workspace A', userId = 'user-a', apiKey = 'key-a') {
+  const response = await app.request('/api/studio/signup', { method: 'POST', auth: false, body: { name, userId, apiKey } });
+  assert.equal(response.status, 201, await response.clone().text());
+  return { ...(await response.json()), cookie: response.headers.get('set-cookie').split(';')[0] };
+}
+
+test('signup validates Gumloop first, stores only code hashes and supports returning access-code login', async t => {
+  const app = await setup(t);
+  const invalid = await app.request('/api/studio/signup', { method: 'POST', auth: false, body: { name: 'Invalid', userId: 'user-invalid', apiKey: 'invalid-test-key' } });
+  assert.equal(invalid.status, 400);
+  assert.equal((await app.db.prepare('SELECT count(*) AS count FROM workspaces').first()).count, 1);
+  const created = await signup(app);
+  assert.match(created.accessCode, /^relay_[a-f0-9]{64}$/);
+  const row = await app.db.prepare('SELECT * FROM workspaces WHERE id=?').bind(created.workspace.id).first();
+  assert.equal(row.name, 'Workspace A'); assert.notEqual(row.access_hash, created.accessCode); assert.equal(row.access_hash.length, 64);
+  const me = await (await app.request('/api/studio/me', { cookieOverride: created.cookie })).json();
+  assert.equal(me.workspace.id, created.workspace.id); assert.equal(me.account.userId, 'user-a'); assert.equal(me.connected, true);
+  assert.ok(!JSON.stringify(me).includes(created.accessCode)); assert.ok(!JSON.stringify(me).includes('key-a'));
+  assert.equal((await app.request('/api/studio/signup', { method: 'POST', cookieOverride: created.cookie, body: { name: 'Another', apiKey: 'key-b', userId: 'user-b' } })).status, 409);
+  const login = await app.request('/api/studio/login', { method: 'POST', auth: false, body: { password: created.accessCode } });
+  assert.equal(login.status, 200); const returningCookie = login.headers.get('set-cookie').split(';')[0];
+  assert.equal((await (await app.request('/api/studio/me', { cookieOverride: returningCookie })).json()).workspace.id, created.workspace.id);
+});
+
+test('tenant admin routes cannot read, update, publish or preview another workspace widget', async t => {
+  const app = await setup(t); const a = await signup(app); const b = await signup(app, 'Workspace B', 'user-b', 'key-b');
+  const create = await app.request('/api/studio/widgets', { method: 'POST', cookieOverride: a.cookie, body: { name: 'A private widget', agentId: 'agent-private' } });
+  assert.equal(create.status, 201); const widget = (await create.json()).widget;
+  assert.equal(app.upstream.at(-1).credential, 'Bearer key-a');
+  const listing = await (await app.request('/api/studio/widgets', { cookieOverride: b.cookie })).json(); assert.deepEqual(listing.widgets, []);
+  for (const [suffix, method, body] of [['', 'GET'], ['', 'PATCH', { version: widget.version, name: 'Hijacked' }], ['/publish', 'POST', { version: widget.version }], ['/unpublish', 'POST', {}], ['/preview', 'POST', {}]]) {
+    assert.equal((await app.request(`/api/studio/widgets/${widget.id}${suffix}`, { method, body, cookieOverride: b.cookie })).status, 404);
+  }
+  await app.request('/api/studio/agents', { cookieOverride: b.cookie }); assert.equal(app.upstream.at(-1).credential, 'Bearer key-b');
+  await app.request('/api/studio/models', { cookieOverride: b.cookie }); assert.equal(app.upstream.at(-1).credential, 'Bearer key-b');
+  await app.login();
+  assert.equal((await (await app.request('/api/studio/me')).json()).workspace.id, 'owner');
+  assert.equal((await app.request(`/api/studio/widgets/${widget.id}`)).status, 404);
+});
+
+test('disconnect removes tenant credentials and contexts, preserves drafts/binding, and never falls back to owner', async t => {
+  const app = await setup(t); const a = await signup(app); const options = { cookieOverride: a.cookie };
+  let response = await app.request('/api/studio/widgets', { ...options, method: 'POST', body: { name: 'Widget A', agentId: 'agent-private' } }); let widget = (await response.json()).widget;
+  response = await app.request(`/api/studio/widgets/${widget.id}`, { ...options, method: 'PATCH', body: { version: widget.version, allowedOrigins: [site] } }); widget = (await response.json()).widget;
+  response = await app.request(`/api/studio/widgets/${widget.id}/publish`, { ...options, method: 'POST', body: { version: widget.version } }); widget = (await response.json()).widget;
+  const visitor = await app.visitor(widget.id); await app.conversation(widget.id, visitor);
+  await app.request(`/api/studio/widgets/${widget.id}/preview`, { ...options, method: 'POST', body: {} });
+  const disconnected = await app.request('/api/studio/disconnect', { ...options, method: 'POST', body: {} }); assert.equal(disconnected.status, 200);
+  const me = await (await app.request('/api/studio/me', options)).json(); assert.equal(me.connected, false); assert.equal(me.authenticated, true); assert.equal(me.workspace.id, a.workspace.id);
+  assert.equal(await app.db.prepare('SELECT * FROM connections WHERE workspace_id=?').bind(a.workspace.id).first(), null);
+  assert.equal((await app.db.prepare('SELECT count(*) AS count FROM visitors WHERE widget_id=?').bind(widget.id).first()).count, 0);
+  assert.equal((await app.db.prepare('SELECT count(*) AS count FROM previews WHERE widget_id=?').bind(widget.id).first()).count, 0);
+  const calls = app.upstream.length;
+  assert.equal((await app.request('/api/studio/agents', options)).status, 503); assert.equal(app.upstream.length, calls);
+  assert.equal((await app.request(`/v1/widgets/${widget.id}/config`, { origin: site })).status, 404);
+  const retained = (await (await app.request(`/api/studio/widgets/${widget.id}`, options)).json()).widget;
+  assert.equal(retained.name, 'Widget A'); assert.equal(retained.status, 'draft');
+  assert.equal((await app.request('/api/studio/connection', { ...options, method: 'POST', body: { apiKey: 'key-b', userId: 'user-b' } })).status, 409);
+  assert.equal((await app.request('/api/studio/connection', { ...options, method: 'POST', body: { apiKey: 'key-a-rotated', userId: 'user-a' } })).status, 200);
+  await app.request('/api/studio/agents', options); assert.equal(app.upstream.at(-1).credential, 'Bearer key-a-rotated');
+});
+
+test('workspace-bound encryption rejects copied ciphertext and guest legacy downgrade', async t => {
+  const app = await setup(t); const a = await signup(app); const b = await signup(app, 'B', 'user-b', 'key-b');
+  const aRow = await app.db.prepare('SELECT ciphertext FROM connections WHERE workspace_id=?').bind(a.workspace.id).first();
+  await app.db.prepare('UPDATE connections SET ciphertext=? WHERE workspace_id=?').bind(aRow.ciphertext, b.workspace.id).run();
+  const count = app.upstream.length;
+  assert.equal((await app.request('/api/studio/agents', { cookieOverride: b.cookie })).status, 502); assert.equal(app.upstream.length, count);
+  await app.db.prepare('UPDATE connections SET encryption_version=1 WHERE workspace_id=?').bind(b.workspace.id).run();
+  assert.equal((await app.request('/api/studio/agents', { cookieOverride: b.cookie })).status, 502); assert.equal(app.upstream.length, count);
+  assert.equal((await app.request('/api/studio/agents', { cookieOverride: a.cookie })).status, 200);
+});
+
+test('legacy migration preserves owner widgets and upgrades only owner ciphertext to bound encryption', async t => {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await crypto.subtle.importKey('raw', new Uint8Array(32).fill(0xaa), 'AES-GCM', false, ['encrypt']);
+  const cipher = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: new TextEncoder().encode('relay:connection:v1') }, key, new TextEncoder().encode(JSON.stringify({ apiKey: 'legacy-owner-key', userId: 'legacy-owner-user' })));
+  const ciphertext = JSON.stringify({ iv: Array.from(iv), cipher: Array.from(new Uint8Array(cipher)) });
+  const app = await setup(t, { beforeWorkspaceMigration: async db => {
+    await db.prepare('INSERT INTO connections(id,ciphertext,account_hash,updated_at) VALUES(1,?,?,?)').bind(ciphertext, 'legacy-account-hash', Date.now()).run();
+    await db.prepare('INSERT INTO widgets(id,name,agent_id,agent_name,config,updated_at) VALUES(?,?,?,?,?,?)').bind('legacy-widget', 'Legacy widget', 'agent-private', 'Original agent', '{}', Date.now()).run();
+  } });
+  await app.login();
+  const me = await (await app.request('/api/studio/me')).json(); assert.equal(me.account.userId, 'legacy-owner-user');
+  const list = await (await app.request('/api/studio/widgets')).json(); assert.equal(list.widgets[0].id, 'legacy-widget');
+  const stored = await app.db.prepare('SELECT * FROM connections WHERE workspace_id=\'owner\'').first(); assert.equal(stored.encryption_version, 2); assert.notEqual(stored.ciphertext, ciphertext);
+  await app.request('/api/studio/agents'); assert.equal(app.upstream.at(-1).credential, 'Bearer legacy-owner-key');
+});
+
+test('a key rotation validated before disconnect cannot reconnect the workspace after disconnect', async t => {
+  let validationStarted;
+  const started = new Promise(resolve => { validationStarted = resolve; });
+  let finishValidation;
+  const release = new Promise(resolve => { finishValidation = resolve; });
+  const app = await setup(t, { beforeUpstream: async request => {
+    if (request.headers.get('authorization') === 'Bearer delayed-rotation-key') {
+      validationStarted(); await release;
+    }
+  } });
+  const a = await signup(app);
+  const rotation = app.request('/api/studio/connection', { method: 'POST', cookieOverride: a.cookie, body: { apiKey: 'delayed-rotation-key', userId: 'user-a' } });
+  await started;
+  try {
+    const disconnect = await app.request('/api/studio/disconnect', { method: 'POST', cookieOverride: a.cookie, body: {} });
+    assert.equal(disconnect.status, 200);
+  } finally { finishValidation(); }
+  assert.equal((await rotation).status, 409);
+  assert.equal(await app.db.prepare('SELECT * FROM connections WHERE workspace_id=?').bind(a.workspace.id).first(), null);
+  assert.equal((await app.db.prepare('SELECT connection_disabled FROM workspaces WHERE id=?').bind(a.workspace.id).first()).connection_disabled, 1);
+  assert.equal((await (await app.request('/api/studio/me', { cookieOverride: a.cookie })).json()).connected, false);
+});
+
+test('account binding cannot change even before the workspace has widgets', async t => {
+  const app = await setup(t); const a = await signup(app);
+  const response = await app.request('/api/studio/connection', { method: 'POST', cookieOverride: a.cookie, body: { apiKey: 'key-b', userId: 'user-b' } });
+  assert.equal(response.status, 409);
+  await app.request('/api/studio/agents', { cookieOverride: a.cookie });
+  assert.equal(app.upstream.at(-1).credential, 'Bearer key-a');
 });

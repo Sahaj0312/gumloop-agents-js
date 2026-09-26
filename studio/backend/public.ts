@@ -1,6 +1,6 @@
 import type { PendingApproval, Session } from '../../src/types.js';
 import { bad, body, callOptions, hash, json, object, only, safeError, text, token, type WidgetConfig } from './common.js';
-import { client, quota, widget } from './data.js';
+import { client, quota, widget, workspace } from './data.js';
 
 interface Visitor { token_hash: string; widget_id: string; origin: string; preview_hash: string; expires_at: number }
 interface Conversation { id: string; visitor_hash: string; upstream_id: string; state: string; lock_token: string | null; lock_until: number; active_until: number }
@@ -51,6 +51,14 @@ export async function handlePublic(request: Request, env: Env, ctx: ExecutionCon
   if (!match || url.search) return bad(404, 'Route not found.');
   const [, widgetId, resource, id, action] = match;
   const row = await widget(env, widgetId!);
+  // Tenant identity comes only from the durable widget record, never a caller's
+  // body, query, Origin, visitor claims, or studio cookie. Fail closed on old or
+  // malformed records rather than making an unscoped credential request.
+  if (typeof row.workspace_id !== 'string' || !row.workspace_id) return bad(503, 'This widget is temporarily unavailable.');
+  const workspaceId = row.workspace_id;
+  const currentWorkspace = await workspace(env, workspaceId);
+  if (currentWorkspace.connection_disabled) return bad(404, 'Widget not found.');
+  const quotaScope = (name: string) => `workspace:${workspaceId}:${name}`;
   const origin = request.headers.get('origin') ?? (request.headers.get('sec-fetch-site') === 'same-origin' ? url.origin : null);
   let previewHash = ''; let appearance: WidgetConfig; let expires = Date.now() + 7 * 86400000;
   const previewToken = request.headers.get('x-widget-preview');
@@ -72,10 +80,14 @@ export async function handlePublic(request: Request, env: Env, ctx: ExecutionCon
     if (resource === 'config' && !id && request.method === 'GET') return json(appearance, 200, headers);
     if (resource === 'visitors' && !id && request.method === 'POST') {
       const input = await body(request, 16384); only(input, []);
-      await quota(env, `bootstrap:${await hash(request.headers.get('cf-connecting-ip') ?? 'local')}`, 20);
-      await quota(env, 'bootstrap-global', 200);
+      await quota(env, quotaScope(`bootstrap:${await hash(request.headers.get('cf-connecting-ip') ?? 'local')}`), 20);
+      await quota(env, quotaScope('bootstrap'), 200);
       const value = token();
-      await env.DB.prepare('INSERT INTO visitors(token_hash,widget_id,origin,preview_hash,expires_at) VALUES(?,?,?,?,?)').bind(await hash(value), widgetId, origin, previewHash, expires).run();
+      // Disconnect revokes all visitor contexts. Do not let a bootstrap that was
+      // already in flight mint a fresh context after disconnect (or reconnect).
+      const minted = await env.DB.prepare('INSERT INTO visitors(token_hash,widget_id,origin,preview_hash,expires_at) SELECT ?,?,?,?,? FROM workspaces WHERE id=? AND connection_disabled=0 AND connection_version=?')
+        .bind(await hash(value), widgetId, origin, previewHash, expires, workspaceId, currentWorkspace.connection_version).run();
+      if (!minted.meta.changes) return bad(409, 'This widget connection changed. Please reload the chat.');
       return json({ visitorToken: value }, 201, headers);
     }
     if (resource !== 'sessions') return bad(404, 'Route not found.');
@@ -84,11 +96,11 @@ export async function handlePublic(request: Request, env: Env, ctx: ExecutionCon
     const visitorHash = await hash(bearer[1]!);
     const visitor = await env.DB.prepare('SELECT * FROM visitors WHERE token_hash=? AND expires_at>?').bind(visitorHash, Date.now()).first<Visitor>();
     if (!visitor || visitor.widget_id !== widgetId || visitor.origin !== origin || visitor.preview_hash !== previewHash) return bad(401, 'Start a new chat to reconnect.');
-    await quota(env, `visitor-requests:${visitorHash}`, 240);
-    const gumloop = await client(env);
+    await quota(env, quotaScope(`visitor-requests:${visitorHash}`), 240);
+    const gumloop = await client(env, workspaceId);
     if (!id && request.method === 'POST') {
       const input = await body(request, 16384); only(input, []);
-      await quota(env, `session-create:${visitorHash}`, 10); await quota(env, 'session-create-global', 60);
+      await quota(env, quotaScope(`session-create:${visitorHash}`), 10); await quota(env, quotaScope('session-create'), 60);
       const localId = `chat_${crypto.randomUUID().replaceAll('-', '')}`;
       // Reserve a durable conversation row first so concurrent creates respect the cap.
       const reserve = await env.DB.prepare('INSERT INTO conversations(id,visitor_hash,upstream_id,state,created_at) SELECT ?,?,?,?,? WHERE (SELECT count(*) FROM conversations WHERE visitor_hash=?)<20').bind(localId, visitorHash, '', 'creating', Date.now(), visitorHash).run();
@@ -123,11 +135,12 @@ export async function handlePublic(request: Request, env: Env, ctx: ExecutionCon
       const current = await snapshot();
       if (action === 'messages' && (!['idle', 'completed', 'failed'].includes(current.state ?? '') || current.pending_approvals?.length)) return bad(409, 'Finish the current request before sending another message.');
       const answers = action === 'approvals' ? decisions(input, current) : undefined;
-      await quota(env, `message:${visitorHash}`, 15); await quota(env, 'message-global', 60); await quota(env, 'message-daily', 2000, 86400);
-      // Reconcile bounded stale slots before enforcing the account-wide concurrency cap.
-      const active = await env.DB.prepare('SELECT id,upstream_id FROM conversations WHERE active_until>0 AND lock_until<? AND id<>? LIMIT 4').bind(Date.now(), id).all<{ id: string; upstream_id: string }>();
+      await quota(env, quotaScope(`message:${visitorHash}`), 15); await quota(env, quotaScope('message'), 60); await quota(env, quotaScope('message-daily'), 2000, 86400);
+      // Reconcile only this workspace's slots, using its credentials. Another
+      // workspace's tasks must not consume capacity or be read with the wrong key.
+      const active = await env.DB.prepare('SELECT c.id,c.upstream_id FROM conversations c JOIN visitors v ON v.token_hash=c.visitor_hash JOIN widgets w ON w.id=v.widget_id WHERE w.workspace_id=? AND c.active_until>0 AND c.lock_until<? AND c.id<>? LIMIT 4').bind(workspaceId, Date.now(), id).all<{ id: string; upstream_id: string }>();
       for (const other of active.results) { try { const { session } = await gumloop.sessions.retrieve(other.upstream_id, callOptions()); await updateState(env, other.id, session); } catch { /* Keep unknown tasks reserved. */ } }
-      const reserve = await env.DB.prepare('UPDATE conversations SET active_until=?,state=\'processing\' WHERE id=? AND (SELECT count(*) FROM conversations WHERE active_until>0 AND id<>?)<4').bind(Date.now() + 210000, id, id).run();
+      const reserve = await env.DB.prepare('UPDATE conversations SET active_until=?,state=\'processing\' WHERE id=? AND (SELECT count(*) FROM conversations c JOIN visitors v ON v.token_hash=c.visitor_hash JOIN widgets w ON w.id=v.widget_id WHERE w.workspace_id=? AND c.active_until>0 AND c.id<>?)<4').bind(Date.now() + 210000, id, workspaceId, id).run();
       if (!reserve.meta.changes) return bad(429, 'Chat is busy. Please try again later.');
       if (answers) {
         try { await gumloop.sessions.resolveApprovals(conversation.upstream_id, { approval_responses: answers }, callOptions()); return json({ session: project(await snapshot(true), id) }, 200, headers); }
