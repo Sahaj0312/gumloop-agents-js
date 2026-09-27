@@ -2,6 +2,10 @@
 
 Relay turns an existing Gumloop agent into an embeddable website chat. Gumloop runs the agent. Relay provides the widget editor, installation script, and server routes that connect visitors to the selected agent.
 
+![Relay system architecture: the studio and website widget connect through a Cloudflare Worker to Gumloop; D1 holds encrypted credentials and workspace records, while Worker Secrets holds the encryption key.](images/relay-architecture.png)
+
+[Download the presentation diagram](images/relay-architecture.png). Generated with the built-in image-generation tool and reviewed against the implementation; [generation prompts](images/relay-architecture-prompt.txt) are included.
+
 ## Connecting an account
 
 A visitor creates a private workspace by entering a name, a Gumloop API key, and a Gumloop user ID. Relay validates the credentials with Gumloop before creating the workspace. No Gumloop password is requested.

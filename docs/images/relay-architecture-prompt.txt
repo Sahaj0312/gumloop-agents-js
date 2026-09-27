@@ -1,0 +1,73 @@
+Use case: infographic-diagram.
+Create a finished, technically accurate system architecture diagram for Relay, an existing widget studio for Gumloop agents. This image will be shown in a founder outreach demo video and in a GitHub README. Wide landscape 16:9, ideally 2560x1440. Extremely crisp readable text, restrained professional editorial design, generous whitespace, flat vector-like rounded boxes, thin precise orthogonal arrows, no 3D, no decorative clutter. Warm ivory background #f7f5f0, dark charcoal text #29332c, terracotta accent #cf694e, muted olive #7d8868. Small abstract line icons only; no unofficial vendor logos. Large title upper left "Relay" and subtitle "System architecture". Small top-right label "Gumloop agents → website chat".
+
+Architecture must match the implemented system exactly. Arrange three columns: BROWSERS left; a large softly tinted bounded area labeled "CLOUDFLARE" in middle; GUMLOOP right. The Cloudflare boundary contains a central Worker card and two lower storage cards. No browser-to-Gumloop arrows. Show the two distinct browser experiences as two cards vertically stacked at left.
+
+LEFT TOP CARD, title "Widget Studio", exact body text three lines:
+"Connect Gumloop account"
+"Design, preview & publish"
+"Private workspace"
+A clear rightward arrow from this card to the Worker labeled "HTTPS · session cookie".
+Small note below this card: "API key + user ID entered once".
+
+LEFT LOWER CARD, title "Website widget", exact body:
+"One script tag"
+"Visitor chat & live replies"
+"Public widget ID"
+A rightward arrow from this card to the Worker labeled "Message + visitor token".
+A distinct dashed terracotta leftward return arrow Worker to website widget labeled "Streamed reply · SSE".
+
+CENTER card inside CLOUDFLARE boundary, title "Cloudflare Worker", exact body with concise readable rows:
+"Studio API + chat proxy"
+"Workspace & conversation ownership"
+"Origin checks · rate limits · locks"
+Small separated bottom strip within same card:
+"Static assets: studio · preview · widget.js"
+
+Below the Worker, still within the Cloudflare boundary, TWO smaller storage cards side by side:
+CARD title "D1 database", body:
+"Widget drafts & published settings"
+"Workspace / visitor / session records"
+"Encrypted Gumloop credentials"
+Connect Worker ↔ D1 with a clean bidirectional line labeled "Read / write".
+
+CARD title "Worker Secrets", body:
+"Encryption key"
+"Kept outside the database"
+Connect Secrets → Worker with a clean line labeled "Decrypt in server memory".
+Use different routing so database and secrets arrows never overlap labels or each other.
+
+RIGHT card outside CLOUDFLARE boundary, title "Gumloop API", exact body:
+"Owner's selected agent"
+"Knowledge & configured tools"
+"Agent execution + history"
+Between Worker and Gumloop draw rightward solid arrow labeled "Server-side API call" and leftward dashed terracotta arrow labeled "Agent response stream". Keys travel only on this server-side connection; never between Gumloop and browsers directly.
+
+Across bottom of entire canvas, a quiet divider and three concise spaced security notes:
+"01  AES-256-GCM, bound to each workspace"
+"02  Access codes & session tokens stored as hashes"
+"03  Embed never contains the Gumloop key"
+
+Technical constraints: This system uses pasted API keys, NOT OAuth. D1 stores encrypted API credentials and conversation mappings, NOT model weights or an LLM. Gumloop executes the actual agent and retains upstream conversation history. Static assets and the API are one Worker deployment, not two unrelated servers. Browser owner authenticates with an HttpOnly session cookie after using a workspace access code. Website visitor has an anonymous scoped token. Draw only the connections explicitly specified. Do not include sample credentials, URLs, account IDs, lock-key values, source-code excerpts, vendor logos, invented services, queues, or billing. Keep all labels legible at presentation size. Favor architectural clarity and balanced spacing over embellishment.
+
+
+--- First correction prompt ---
+Edit this Relay architecture diagram. Preserve the entire layout, typography, wording, colors, cards, icons, and all other arrows exactly. Make ONLY these connector corrections:
+1. The solid green "Message + visitor token" arrow currently ends on the Cloudflare outer boundary. Extend its route horizontally into the gutter left of the central Cloudflare Worker card, then bend upward, then right so the final arrowhead actually terminates on the LEFT EDGE OF THE CLOUDFLARE WORKER CARD, around its lower-middle area. This must unambiguously connect Website widget to Cloudflare Worker, not to D1 or just the container.
+2. The dashed terracotta "Streamed reply · SSE" arrow currently begins at the Cloudflare boundary. Extend it to originate at the LEFT EDGE OF THE CLOUDFLARE WORKER CARD near its lower edge, route left into the gutter then down then left to the Website widget. Keep it visually separate from the request route. Do not cross the D1 card, any text, or the request arrow. Its only arrowhead points left into the Website widget. Preserve the label position below the lower horizontal run.
+3. The vertical green line between Worker Secrets and Cloudflare Worker should be ONE WAY UPWARD, with its only arrowhead touching the bottom of the Worker card. Remove the bottom arrowhead that points into Worker Secrets. Keep "Decrypt in server memory" unchanged.
+Keep the D1 read/write arrow bidirectional and unchanged. Keep the Gumloop API forward and return arrows unchanged. Change absolutely no wording or security notes. Final must remain a crisp professional wide system architecture slide.
+
+--- Final correction prompt ---
+Make ONE precise connector correction to this existing Relay architecture image. Preserve every card, every word, every other arrow, typography, colors, canvas size and positions.
+The dashed orange "Streamed reply · SSE" return connector currently goes behind/through the D1 database card. DELETE its current vertical segment at approximately x628 from y465 to611 and its short horizontal stub ending at the D1 card. REDRAW the COMPLETE return connector:
+- Start at Cloudflare Worker card's LEFT border at approximately (657,465).
+- Go LEFT horizontally to (560,465), OUTSIDE the Cloudflare boundary (which starts at x583).
+- Turn DOWN vertically to (560,611).
+- Turn LEFT horizontally to (377,611), ending in a LEFT-pointing arrowhead into the Website widget.
+- Keep the existing "Streamed reply · SSE" text beneath the horizontal bottom run.
+- At the crossing with the green request connector near (607,465) use a tiny white line-jump gap in the GREEN connector so it is visually clear the paths cross without connecting. No junction dot.
+- The complete dashed orange return path must be visible, must not touch the D1 database card at all, and must not pass through any text.
+Leave the green message request path and its endpoint intact aside from the small crossing gap. Leave all other objects unchanged.
+
+Generated using the built-in image_gen tool. Final image reviewed against Relay's deployed architecture.
