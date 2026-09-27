@@ -45,10 +45,10 @@ function showAuth(mode = 'signup') {
   $('auth-tabs').hidden = !['signup', 'login'].includes(mode);
   for (const button of document.querySelectorAll('[data-auth]')) button.setAttribute('aria-selected', String(button.dataset.auth === mode));
   const copy = {
-    signup: ['YOUR AGENTS. YOUR OWN SPACE.', 'Make yourself at home.', 'Connect your Gumloop account to create a private workspace for your agents and website widgets.'],
-    login: ['YOUR WORKSPACE, RIGHT WHERE YOU LEFT IT', 'Welcome back.', 'Use your saved access code to return to your own workspace.'],
-    connect: ['LET’S MAKE THE CONNECTION', 'Bring your agents.', 'Connect your Gumloop account to start building widgets with the agents you already have.'],
-    code: ['ONE LAST THING BEFORE YOU GO IN', 'Keep your way back.', 'Save this code now. It is your private key to this workspace, and we won’t show it again.'],
+    signup: ['Widget studio for Gumloop', 'Create a workspace', 'Connect your Gumloop account to build and manage website chat widgets.'],
+    login: ['Widget studio for Gumloop', 'Sign in to your workspace', 'Enter the access code you saved when you created your workspace.'],
+    connect: ['Gumloop connection', 'Connect your account', 'Enter your Gumloop credentials to use your agents in Relay.'],
+    code: ['Workspace created', 'Save your access code', 'You’ll need this code to sign in again. It is only shown once.'],
   }[mode];
   $('auth-eyebrow').textContent = copy[0]; $('auth-title').textContent = copy[1]; $('auth-copy').textContent = copy[2];
   formError('auth-error', '');
@@ -76,7 +76,7 @@ function updateWorkspaceIdentity(me) {
   $('settings-connected-badge').className = state.connected ? 'badge live' : 'badge';
   $('settings-connection-copy').textContent = state.connected ? 'Your agents run through this account.' : 'Reconnect to use your agents and publish your widgets again.';
   $('rotation-key-label').textContent = state.connected ? 'New API key' : 'Gumloop API key';
-  $('rotate-key-button').replaceChildren(document.createTextNode(state.connected ? 'Update API key ' : 'Reconnect Gumloop '), element('span', '', '↗'));
+  $('rotate-key-button').textContent = state.connected ? 'Update API key' : 'Reconnect Gumloop';
   $('disconnect-account').disabled = !state.connected;
   $('create-widget').disabled = !state.connected; $('create-first').disabled = !state.connected;
 }
@@ -219,13 +219,9 @@ function renderDashboard() {
   $('widget-grid').replaceChildren(); $('widgets-empty').hidden = state.widgets.length > 0;
   for (const widget of state.widgets) {
     const card = element('button', 'widget-card'); card.type = 'button'; card.setAttribute('aria-label', `Edit ${widget.name}`);
-    const accent = /^#[a-f\d]{6}$/i.test(widget.config?.accent || '') ? widget.config.accent : '#d06a4f'; card.style.setProperty('--card-accent', accent);
-    const preview = element('div', 'card-preview');
-    preview.innerHTML = '<div class="card-browser"><div class="browser-dots"><i></i><i></i><i></i></div><div class="browser-line"></div><div class="browser-line short"></div><div class="browser-blocks"><i></i><i></i><i></i></div></div>';
-    const mini = element('div', 'mini-chat'); const title = element('div', 'mini-chat-title'); title.append(element('i'), document.createTextNode(widget.config?.title || 'Ask our team')); mini.append(title, element('div', 'mini-chat-message', widget.config?.welcome || 'How can I help?'), element('div', 'mini-chat-input')); preview.append(mini, element('div', 'mini-bubble', `◌ ${widget.config?.bubbleLabel || 'Ask us'}`));
     const body = element('div', 'card-body'); const row = element('div', 'card-title-row'); row.append(element('h3', '', widget.name), element('span', widget.status === 'published' ? 'badge live' : 'badge', widget.status === 'published' ? 'Published' : 'Draft'));
-    const agent = state.agents.find(item => item.id === widget.agentId); const meta = element('div', 'card-meta'); meta.append(element('span', '', `Updated ${dateLabel(widget.updatedAt)}`), element('span', '', 'Edit widget ↗'));
-    body.append(row, element('p', 'card-agent', `✳ ${widget.agentName || agent?.name || 'Connected agent'}`), meta); card.append(preview, body); card.addEventListener('click', () => openEditor(widget.id)); $('widget-grid').append(card);
+    const agent = state.agents.find(item => item.id === widget.agentId); const meta = element('div', 'card-meta'); meta.append(element('span', '', `Updated ${dateLabel(widget.updatedAt)}`), element('span', '', 'Edit widget'));
+    body.append(row, element('p', 'card-agent', widget.agentName || agent?.name || 'Connected agent'), meta); card.append(body); card.addEventListener('click', () => openEditor(widget.id)); $('widget-grid').append(card);
   }
 }
 function renderAgents() {
@@ -234,8 +230,8 @@ function renderAgents() {
   $('agent-grid').replaceChildren(); $('agents-empty').hidden = agents.length > 0;
   $('agents-empty').textContent = !state.connected ? 'Reconnect Gumloop in Settings to load your agents.' : state.agents.length ? 'No agents match your search.' : 'No agents found. Create an agent in Gumloop, then refresh this page.';
   for (const agent of agents) {
-    const card = element('article', 'agent-card'); const button = element('button', 'button secondary', 'Create a widget ↗'); button.addEventListener('click', () => openCreate(agent.id));
-    card.append(element('span', 'agent-icon', '✳'), element('h3', '', agent.name || 'Unnamed agent'), element('p', '', agent.description || 'Ready to connect to a website widget.'), element('span', 'model-label', agent.model_name || 'Model configured in Gumloop'), button); $('agent-grid').append(card);
+    const card = element('article', 'agent-card'); const button = element('button', 'button secondary', 'Create widget'); button.addEventListener('click', () => openCreate(agent.id));
+    card.append(element('h3', '', agent.name || 'Unnamed agent'), element('p', '', agent.description || 'Ready to connect to a website widget.'), element('span', 'model-label', agent.model_name || 'Model configured in Gumloop'), button); $('agent-grid').append(card);
   }
 }
 $('agent-search').addEventListener('input', renderAgents);
@@ -257,7 +253,7 @@ $('create-form').addEventListener('submit', async event => {
   event.preventDefault(); setFormBusy(event.currentTarget, true); formError('create-error', '');
   try {
     const result = await api('/widgets', { method: 'POST', body: { name: $('new-widget-name').value.trim(), agentId: $('new-agent').value } });
-    state.widgets.unshift(result.widget); $('create-dialog').close(); renderDashboard(); await openEditor(result.widget.id); notice('Your widget is ready to make your own.');
+    state.widgets.unshift(result.widget); $('create-dialog').close(); renderDashboard(); await openEditor(result.widget.id); notice('Widget created.');
   } catch (error) { formError('create-error', error.message); }
   finally { setFormBusy($('create-form'), false); }
 });
@@ -317,7 +313,7 @@ function updateEditorState() {
   $('save-draft').disabled = state.saving || !state.dirty;
   $('publish').disabled = state.saving || !state.connected;
   for (const input of document.querySelectorAll('#appearance-tab input, #appearance-tab textarea, #appearance-tab select, #allowed-origins')) input.disabled = state.saving;
-  $('publish').replaceChildren(document.createTextNode(widget.status === 'published' ? 'Publish changes ' : 'Publish widget '), element('span', '', '↗'));
+  $('publish').textContent = widget.status === 'published' ? 'Publish changes' : 'Publish widget';
   $('unpublish').hidden = widget.status !== 'published';
   $('embed-status').textContent = widget.status === 'published' ? 'Ready to embed' : 'Publish first'; $('embed-status').className = widget.status === 'published' ? 'badge live' : 'badge';
   $('copy-embed').disabled = widget.status !== 'published';
