@@ -17,7 +17,7 @@
       welcome: typeof value.welcome === 'string' ? value.welcome.slice(0, 2000) : 'Hi! How can I help?',
       accent: /^#[\da-f]{6}$/i.test(value.accent || '') ? value.accent : '#7455e8',
       position: value.position === 'left' ? 'left' : 'right',
-      bubbleLabel: typeof value.bubbleLabel === 'string' && value.bubbleLabel.trim() ? value.bubbleLabel.slice(0, 60) : 'Ask us',
+      bubbleLabel: typeof value.bubbleLabel === 'string' ? value.bubbleLabel.slice(0, 60).trim() : 'Ask us',
       bubbleStyle: ['icon-text', 'icon', 'text'].includes(value.bubbleStyle) ? value.bubbleStyle : 'icon-text',
       bubbleIcon: typeof value.bubbleIcon === 'string' && value.bubbleIcon.length <= 32 ? value.bubbleIcon.trim() : '',
       suggestions: Array.isArray(value.suggestions) ? value.suggestions.filter(item => typeof item === 'string' && item.trim()).slice(0, 6).map(item => item.slice(0, 200)) : [],
@@ -108,7 +108,7 @@
       :host{--gl-width:384px;--gl-radius:18px}.panel{width:min(var(--gl-width),calc(100vw - 32px));border-radius:var(--gl-radius)}.avatar{overflow:hidden}.avatar img{width:100%;height:100%;object-fit:cover}.suggestions{display:flex;gap:7px;flex-wrap:wrap;margin:4px 0 12px}.suggestions button{background:transparent;border:1px solid #ded5d1;border-radius:18px;padding:7px 11px;color:#645650;font-size:11px;line-height:1.45;text-align:left}.suggestions button:hover{border-color:var(--gl-accent);color:var(--gl-accent)}:host([data-theme=dark]){color-scheme:dark;color:#eee9e6}:host([data-theme=dark]) .panel{background:#211f24;border-color:#454049}:host([data-theme=dark]) .header{background:#28252c;border-color:#454049}:host([data-theme=dark]) .title{color:#f5efec}:host([data-theme=dark]) .subtitle,:host([data-theme=dark]) .status{color:#bbb0b9}:host([data-theme=dark]) .avatar{background:#38323c}:host([data-theme=dark]) .assistant,:host([data-theme=dark]) .typing{background:#342f38;color:#ece4e9}:host([data-theme=dark]) .composer{border-color:#454049}:host([data-theme=dark]) .input-wrap{background:#28252c;border-color:#514650}:host([data-theme=dark]) textarea{color:#f4edf2}:host([data-theme=dark]) .suggestions button{color:#d6c7ce;border-color:#63505e}:host([data-theme=dark]) .icon-button:hover{background:#3e3641;color:#fff}:host([data-theme=dark]) .notice,:host([data-theme=dark]) .approval{background:#362e27;border-color:#64513d;color:#f0d3ae}:host([data-theme=dark]) .approval p{color:#d6bca0}:host([data-theme=dark]) .question select{background:#29242a;border-color:#64513d;color:#f3e4d6}:host([data-theme=dark]) .stop{background:#352b2c;border-color:#654645;color:#e4b3aa}@media(max-width:480px){.panel{width:min(var(--gl-width),calc(100vw - 24px));border-radius:var(--gl-radius)}}
       .bubble{max-width:calc(100vw - 48px)}.bubble-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bubble svg{flex-shrink:0}.bubble-emoji{font-size:24px;line-height:1;flex-shrink:0;max-width:32px;overflow:hidden}.bubble[data-style="icon"]{width:58px;padding:0;border-radius:50%}@media(max-width:480px){.bubble[data-style="icon"]{width:53px}}
     </style>
-    <button class="bubble" type="button" aria-expanded="false" aria-controls="chat-panel" aria-label="Open chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.3 8.3 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.3 8.3 0 0 1-3.8-.9L3 21l1.9-5.7a8.3 8.3 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.3 8.3 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z"/></svg><span class="bubble-emoji" aria-hidden="true" hidden></span><span class="bubble-label">Ask us</span></button>
+    <button class="bubble" type="button" aria-expanded="false" aria-controls="chat-panel" aria-label="Open chat" hidden><span class="bubble-emoji" aria-hidden="true" hidden></span><span class="bubble-label" hidden></span></button>
     <section class="panel" id="chat-panel" role="dialog" aria-label="Chat with our assistant" hidden>
       <header class="header"><div class="avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3Z"/></svg></div><div class="heading"><h2 class="title">Ask our team</h2><div class="subtitle"><i class="dot"></i>AI assistant</div></div><button class="icon-button new" type="button" aria-label="Start a new chat" title="Start a new chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button><button class="icon-button close" type="button" aria-label="Close chat" title="Close chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header>
       <div class="scroll"><div class="transcript" role="log" aria-label="Conversation" aria-live="polite" aria-relevant="additions text"></div><div class="suggestions" aria-label="Suggested questions"></div><div class="approvals"></div><div class="typing" aria-label="Assistant is replying" hidden><i></i><i></i><i></i></div></div>
@@ -121,7 +121,6 @@
   const ui = Object.fromEntries(['bubble', 'panel', 'title', 'new', 'close', 'scroll', 'transcript', 'suggestions', 'approvals', 'typing', 'notice', 'composer', 'send', 'status', 'stop'].map(name => [name, $(`.${name}`)]));
   ui.input = $('textarea');
   ui.bubbleLabel = $('.bubble-label');
-  ui.bubbleIcon = ui.bubble.querySelector('svg');
   ui.bubbleEmoji = $('.bubble-emoji');
   ui.avatar = $('.avatar');
   const avatarFallback = ui.avatar.querySelector('svg');
@@ -149,11 +148,13 @@
     host.style.setProperty('--gl-width', `${config.width}px`);
     host.style.setProperty('--gl-radius', `${config.borderRadius}px`);
     ui.bubbleLabel.textContent = config.bubbleLabel;
-    ui.bubble.dataset.style = config.bubbleStyle;
-    ui.bubbleLabel.hidden = config.bubbleStyle === 'icon';
+    const hasText = config.bubbleStyle !== 'icon' && Boolean(config.bubbleLabel);
+    const hasIcon = config.bubbleStyle !== 'text' && Boolean(config.bubbleIcon);
+    ui.bubble.dataset.style = hasIcon && !hasText ? 'icon' : config.bubbleStyle;
+    ui.bubbleLabel.hidden = !hasText;
     ui.bubbleEmoji.textContent = config.bubbleIcon;
-    ui.bubbleEmoji.hidden = config.bubbleStyle === 'text' || !config.bubbleIcon;
-    ui.bubbleIcon.toggleAttribute('hidden', config.bubbleStyle === 'text' || Boolean(config.bubbleIcon));
+    ui.bubbleEmoji.hidden = !hasIcon;
+    ui.bubble.hidden = !hasText && !hasIcon;
     if (config.avatarUrl) {
       if (avatarImage.getAttribute('src') !== config.avatarUrl) avatarImage.src = config.avatarUrl;
       avatarImage.hidden = false; avatarFallback.setAttribute('hidden', '');
@@ -162,7 +163,7 @@
     }
     ui.title.textContent = config.title;
     ui.panel.setAttribute('aria-label', config.title);
-    ui.bubble.setAttribute('aria-label', `Open ${config.bubbleStyle === 'icon' ? config.title : config.bubbleLabel}`);
+    ui.bubble.setAttribute('aria-label', `Open ${hasText ? config.bubbleLabel : config.title}`);
   }
   function controls() {
     const canSend = initialized && !busy && !streaming && !stopping && !authExpired && !ownerRequired && (sessionId ? READY.has(state) : true);
@@ -390,7 +391,7 @@
   }
   function hide() {
     open = false; ui.panel.hidden = true; ui.bubble.setAttribute('aria-expanded', 'false'); clearTimeout(pollTimer);
-    if (restoreFocus?.isConnected && typeof restoreFocus.focus === 'function') restoreFocus.focus(); else ui.bubble.focus();
+    if (restoreFocus?.isConnected && typeof restoreFocus.focus === 'function') restoreFocus.focus(); else if (!ui.bubble.hidden) ui.bubble.focus();
   }
   ui.bubble.addEventListener('click', () => open ? hide() : show());
   ui.close.addEventListener('click', hide);

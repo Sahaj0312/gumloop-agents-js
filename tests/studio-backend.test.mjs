@@ -305,7 +305,7 @@ test('launcher modes validate labels/icons and round-trip through drafts, public
   assert.equal(widget.config.bubbleStyle, 'icon-text'); assert.equal(widget.config.bubbleIcon, '');
   for (const config of [
     { bubbleStyle: 'unsupported' }, { bubbleIcon: '🙂'.repeat(17) }, { bubbleIcon: null },
-    { bubbleStyle: 'text', bubbleLabel: '' }, { bubbleStyle: 'icon-text', bubbleLabel: '   ' },
+    { bubbleLabel: null }, { bubbleLabel: 'x'.repeat(41) },
   ]) {
     const invalid = await app.request(`/api/studio/widgets/${widget.id}`, { method: 'PATCH', body: { version: widget.version, config } });
     assert.equal(invalid.status, 400);
@@ -317,8 +317,14 @@ test('launcher modes validate labels/icons and round-trip through drafts, public
   widget = await app.publish(widget);
   const published = await (await app.request(`/v1/widgets/${widget.id}/config`, { origin: site })).json();
   assert.equal(published.bubbleStyle, 'icon'); assert.equal(published.bubbleIcon, family); assert.equal(published.bubbleLabel, '');
-  const invalidSwitch = await app.request(`/api/studio/widgets/${widget.id}`, { method: 'PATCH', body: { version: widget.version, config: { bubbleStyle: 'text' } } });
-  assert.equal(invalidSwitch.status, 400, 'Text mode cannot inherit the icon-only empty label');
+  for (const bubbleStyle of ['text', 'icon-text', 'icon']) {
+    const response = await app.request(`/api/studio/widgets/${widget.id}`, { method: 'PATCH', body: { version: widget.version, config: { bubbleStyle, bubbleLabel: '', bubbleIcon: '' } } });
+    assert.equal(response.status, 200); widget = (await response.json()).widget;
+    widget = await app.publish(widget);
+    const emptyConfig = await (await app.request(`/v1/widgets/${widget.id}/config`, { origin: site })).json();
+    assert.equal(emptyConfig.bubbleLabel, ''); assert.equal(emptyConfig.bubbleIcon, '');
+    assert.equal(emptyConfig.bubbleStyle, bubbleStyle);
+  }
   const previewResponse = await app.request(`/api/studio/widgets/${widget.id}/preview`, { method: 'POST', body: { config: { bubbleStyle: 'text', bubbleLabel: 'Ask us', bubbleIcon: 'x'.repeat(32) } } });
   assert.equal(previewResponse.status, 200);
   const preview = new URL((await previewResponse.json()).previewUrl).searchParams.get('token');

@@ -274,7 +274,6 @@ function updateLauncherFields() {
   const style = controls.bubbleStyle.value;
   $('bubble-icon-field').hidden = style === 'text';
   $('bubble-label-field').hidden = style === 'icon';
-  controls.bubbleLabel.required = style !== 'icon';
 }
 function fillWidget() {
   const widget = state.widget;
@@ -298,7 +297,6 @@ function validateDraft(draft, publishing = false) {
   if (!draft.name) throw new Error('Give your widget a name.');
   if (draft.name.length > 80) throw new Error('Keep your widget name under 80 characters.');
   if (!draft.config.title.trim()) throw new Error('Add a chat title.');
-  if (draft.config.bubbleStyle !== 'icon' && !draft.config.bubbleLabel.trim()) throw new Error('Add launcher text, or choose Icon only.');
   if (!/^#[a-f\d]{6}$/i.test(draft.config.accent)) throw new Error('Use a six-digit hex color, such as #d06a4f.');
   if (draft.config.suggestions.length > 4) throw new Error('Use up to four conversation starters.');
   if (draft.config.suggestions.some(value => value.length > 120)) throw new Error('Keep each conversation starter under 120 characters.');

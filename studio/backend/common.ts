@@ -53,7 +53,7 @@ export function config(value: unknown, base: Partial<WidgetConfig> = defaults): 
   if (!['icon-text', 'icon', 'text'].includes(result.bubbleStyle)) bad(400, 'Invalid launcher style.');
   result.bubbleIcon = text(result.bubbleIcon, 'launcher icon', 32, true).trim();
   for (const [key, max] of [['title', 80], ['welcome', 500], ['bubbleLabel', 40]] as const) {
-    text(result[key], key, max, key === 'welcome' || (key === 'bubbleLabel' && result.bubbleStyle === 'icon'));
+    text(result[key], key, max, key === 'welcome' || key === 'bubbleLabel');
   }
   if (!/^#[0-9a-fA-F]{6}$/.test(text(result.accent, 'accent'))) bad(400, 'Choose a six-digit hex color.');
   if (!['left', 'right'].includes(result.position) || !['light', 'dark'].includes(result.theme)) bad(400, 'Invalid widget theme or position.');

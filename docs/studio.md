@@ -13,7 +13,7 @@ Each visitor can create a separate private workspace connected to their own Guml
 5. Save the draft, add the exact website origins where the widget should run, and publish.
 6. Copy the generated script tag into your website. Published design updates appear on subsequent widget loads without replacing the snippet.
 
-In Appearance, **Launcher style** controls the button that opens the chat: icon and text, icon only, or text only. Enter an emoji or symbol for a custom icon, or leave it blank for the built-in chat icon. Icon-only buttons keep an accessible name based on the chat title. Existing widgets keep their current icon-and-text launcher.
+In Appearance, **Launcher style** controls the button that opens the chat: icon and text, icon only, or text only. Enter an emoji or symbol for an icon. Blank icon and text fields stay blank; no fallback content is inserted. If the selected style has no visible icon or text, the launcher is hidden. Icon-only buttons keep an accessible name based on the chat title.
 
 Widget drafts and the published configuration are separate. Saving a draft does not change an installed widget. Publishing copies the saved draft and its origin list into the public configuration. Unpublishing disables public access.
 

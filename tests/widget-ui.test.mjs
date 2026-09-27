@@ -105,3 +105,16 @@ test('preview binding accompanies every request, including public bootstrap and 
   });
   assert.deepEqual(plain(helpers.requestHeaders('visitor', '', false, false)), { Authorization: 'Bearer visitor' });
 });
+
+// Clearing an optional field must never restore the old launcher defaults.
+test('blank launcher content stays blank in every style', () => {
+  for (const bubbleStyle of ['icon-text', 'icon', 'text']) {
+    for (const blank of ['', '   ']) {
+      const config = helpers.cleanConfig({ bubbleStyle, bubbleLabel: blank, bubbleIcon: blank });
+      assert.equal(config.bubbleLabel, '');
+      assert.equal(config.bubbleIcon, '');
+    }
+  }
+  assert.equal(helpers.cleanConfig({}).bubbleLabel, 'Ask us');
+  assert.equal(helpers.cleanConfig({}).bubbleIcon, '');
+});
