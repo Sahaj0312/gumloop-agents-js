@@ -42,14 +42,19 @@ export const callOptions = () => ({ signal: AbortSignal.timeout(25000) });
 
 export interface WidgetConfig {
   title: string; welcome: string; accent: string; position: 'left' | 'right'; bubbleLabel: string;
+  bubbleStyle: 'icon-text' | 'icon' | 'text'; bubbleIcon: string;
   suggestions: string[]; theme: 'light' | 'dark'; borderRadius: number; width: number; avatarUrl: string;
 }
-export const defaults: WidgetConfig = { title: 'Ask our team', welcome: 'Hi! How can I help?', accent: '#d06a4f', position: 'right', bubbleLabel: 'Ask us', suggestions: [], theme: 'light', borderRadius: 18, width: 384, avatarUrl: '' };
-export function config(value: unknown, base: WidgetConfig = defaults): WidgetConfig {
+export const defaults: WidgetConfig = { title: 'Ask our team', welcome: 'Hi! How can I help?', accent: '#d06a4f', position: 'right', bubbleLabel: 'Ask us', bubbleStyle: 'icon-text', bubbleIcon: '', suggestions: [], theme: 'light', borderRadius: 18, width: 384, avatarUrl: '' };
+export function config(value: unknown, base: Partial<WidgetConfig> = defaults): WidgetConfig {
   if (!object(value)) return bad(400, 'Invalid widget appearance.');
   only(value, Object.keys(defaults));
-  const result = { ...base, ...value };
-  for (const [key, max] of [['title', 80], ['welcome', 500], ['bubbleLabel', 40]] as const) text(result[key], key, max, key === 'welcome');
+  const result = { ...defaults, ...base, ...value };
+  if (!['icon-text', 'icon', 'text'].includes(result.bubbleStyle)) bad(400, 'Invalid launcher style.');
+  result.bubbleIcon = text(result.bubbleIcon, 'launcher icon', 32, true).trim();
+  for (const [key, max] of [['title', 80], ['welcome', 500], ['bubbleLabel', 40]] as const) {
+    text(result[key], key, max, key === 'welcome' || (key === 'bubbleLabel' && result.bubbleStyle === 'icon'));
+  }
   if (!/^#[0-9a-fA-F]{6}$/.test(text(result.accent, 'accent'))) bad(400, 'Choose a six-digit hex color.');
   if (!['left', 'right'].includes(result.position) || !['light', 'dark'].includes(result.theme)) bad(400, 'Invalid widget theme or position.');
   if (!Number.isInteger(result.width) || result.width < 320 || result.width > 480 || !Number.isInteger(result.borderRadius) || result.borderRadius < 8 || result.borderRadius > 28) bad(400, 'Invalid widget size.');

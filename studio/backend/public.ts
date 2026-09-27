@@ -1,5 +1,5 @@
 import type { PendingApproval, Session } from '../../src/types.js';
-import { bad, body, callOptions, hash, json, object, only, safeError, text, token, type WidgetConfig } from './common.js';
+import { bad, body, callOptions, config, hash, json, object, only, safeError, text, token, type WidgetConfig } from './common.js';
 import { client, quota, widget, workspace } from './data.js';
 
 interface Visitor { token_hash: string; widget_id: string; origin: string; preview_hash: string; expires_at: number }
@@ -67,10 +67,10 @@ export async function handlePublic(request: Request, env: Env, ctx: ExecutionCon
     previewHash = await hash(previewToken);
     const preview = await env.DB.prepare('SELECT config,origin,expires_at FROM previews WHERE token_hash=? AND widget_id=? AND expires_at>?').bind(previewHash, widgetId, Date.now()).first<{ config: string; origin: string; expires_at: number }>();
     if (!preview || origin !== preview.origin || origin !== url.origin) return bad(403, 'This preview has expired. Open a new preview in the studio.');
-    appearance = JSON.parse(preview.config); expires = Math.min(expires, preview.expires_at);
+    appearance = config(JSON.parse(preview.config)); expires = Math.min(expires, preview.expires_at);
   } else {
     if (!row.published_config || !origin || !(JSON.parse(row.published_origins) as string[]).includes(origin)) return bad(403, 'This website is not allowed to use this widget.');
-    appearance = JSON.parse(row.published_config);
+    appearance = config(JSON.parse(row.published_config));
   }
   const headers = new Headers({ 'Access-Control-Allow-Origin': origin!, Vary: 'Origin', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Widget-Preview', 'Access-Control-Expose-Headers': 'Retry-After', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
   // Preflight cannot carry the preview secret. See special handler below.

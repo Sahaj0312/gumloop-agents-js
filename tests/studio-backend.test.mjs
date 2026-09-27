@@ -299,3 +299,45 @@ test('account binding cannot change even before the workspace has widgets', asyn
   await app.request('/api/studio/agents', { cookieOverride: a.cookie });
   assert.equal(app.upstream.at(-1).credential, 'Bearer key-a');
 });
+
+test('launcher modes validate labels/icons and round-trip through drafts, publication and previews', async t => {
+  const app = await setup(t); await app.login(); let widget = await app.createWidget();
+  assert.equal(widget.config.bubbleStyle, 'icon-text'); assert.equal(widget.config.bubbleIcon, '');
+  for (const config of [
+    { bubbleStyle: 'unsupported' }, { bubbleIcon: '🙂'.repeat(17) }, { bubbleIcon: null },
+    { bubbleStyle: 'text', bubbleLabel: '' }, { bubbleStyle: 'icon-text', bubbleLabel: '   ' },
+  ]) {
+    const invalid = await app.request(`/api/studio/widgets/${widget.id}`, { method: 'PATCH', body: { version: widget.version, config } });
+    assert.equal(invalid.status, 400);
+  }
+  const family = '👨‍👩‍👧‍👦';
+  const saved = await app.request(`/api/studio/widgets/${widget.id}`, { method: 'PATCH', body: { version: widget.version, config: { bubbleStyle: 'icon', bubbleLabel: '', bubbleIcon: ` ${family} ` } } });
+  assert.equal(saved.status, 200); widget = (await saved.json()).widget;
+  assert.equal(widget.config.bubbleIcon, family); assert.equal(widget.config.bubbleLabel, '');
+  widget = await app.publish(widget);
+  const published = await (await app.request(`/v1/widgets/${widget.id}/config`, { origin: site })).json();
+  assert.equal(published.bubbleStyle, 'icon'); assert.equal(published.bubbleIcon, family); assert.equal(published.bubbleLabel, '');
+  const invalidSwitch = await app.request(`/api/studio/widgets/${widget.id}`, { method: 'PATCH', body: { version: widget.version, config: { bubbleStyle: 'text' } } });
+  assert.equal(invalidSwitch.status, 400, 'Text mode cannot inherit the icon-only empty label');
+  const previewResponse = await app.request(`/api/studio/widgets/${widget.id}/preview`, { method: 'POST', body: { config: { bubbleStyle: 'text', bubbleLabel: 'Ask us', bubbleIcon: 'x'.repeat(32) } } });
+  assert.equal(previewResponse.status, 200);
+  const preview = new URL((await previewResponse.json()).previewUrl).searchParams.get('token');
+  const previewConfig = await (await app.request(`/v1/widgets/${widget.id}/config`, { preview })).json();
+  assert.equal(previewConfig.bubbleStyle, 'text'); assert.equal(previewConfig.bubbleIcon.length, 32);
+});
+
+test('legacy widget records gain launcher defaults on admin, public and preview reads', async t => {
+  const app = await setup(t); await app.login(); let widget = await app.publish(await app.createWidget());
+  const legacy = { ...widget.config }; delete legacy.bubbleStyle; delete legacy.bubbleIcon;
+  await app.db.prepare('UPDATE widgets SET config=?,published_config=? WHERE id=?').bind(JSON.stringify(legacy), JSON.stringify(legacy), widget.id).run();
+  const admin = (await (await app.request(`/api/studio/widgets/${widget.id}`)).json()).widget;
+  assert.equal(admin.config.bubbleStyle, 'icon-text'); assert.equal(admin.config.bubbleIcon, '');
+  assert.equal(admin.publishedConfig.bubbleStyle, 'icon-text');
+  const published = await (await app.request(`/v1/widgets/${widget.id}/config`, { origin: site })).json();
+  assert.equal(published.bubbleStyle, 'icon-text'); assert.equal(published.bubbleIcon, '');
+  const previewURL = new URL((await (await app.request(`/api/studio/widgets/${widget.id}/preview`, { method: 'POST', body: {} })).json()).previewUrl);
+  const previewConfig = await (await app.request(`/v1/widgets/${widget.id}/config`, { preview: previewURL.searchParams.get('token') })).json();
+  assert.equal(previewConfig.bubbleStyle, 'icon-text'); assert.equal(previewConfig.bubbleIcon, '');
+  const saved = await app.request(`/api/studio/widgets/${widget.id}`, { method: 'PATCH', body: { version: widget.version, config: { title: 'Updated legacy title' } } });
+  assert.equal(saved.status, 200); assert.equal((await saved.json()).widget.config.bubbleStyle, 'icon-text');
+});

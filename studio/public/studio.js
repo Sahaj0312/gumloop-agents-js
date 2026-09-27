@@ -1,6 +1,6 @@
 const $ = id => document.getElementById(id);
 const state = { agents: [], widgets: [], widget: null, agent: null, view: 'widgets', tab: 'appearance', csrf: null, dirty: false, agentDirty: false, saving: false, previewUrl: null, previewGeneration: 0, previewTimer: null, noticeTimer: null, workspace: null, account: null, connected: false, onboardingCode: null, workspaceGeneration: 0 };
-const configFields = ['title', 'welcome', 'accent', 'position', 'bubbleLabel', 'theme', 'borderRadius', 'width', 'avatarUrl'];
+const configFields = ['title', 'welcome', 'accent', 'position', 'bubbleLabel', 'bubbleStyle', 'bubbleIcon', 'theme', 'borderRadius', 'width', 'avatarUrl'];
 const controls = Object.fromEntries(configFields.map(key => [key, document.querySelector(`[data-config="${key}"]`)]));
 const clone = value => JSON.parse(JSON.stringify(value));
 
@@ -270,10 +270,17 @@ async function openEditor(id) {
     else { $('save-agent').disabled = true; $('agent-save-status').textContent = 'Reconnect Gumloop in Settings to edit this agent.'; $('preview-frame').src = 'about:blank'; $('preview-loading').hidden = false; $('preview-loading').querySelector('p').textContent = 'Reconnect Gumloop in Settings to preview this widget.'; $('retry-preview').hidden = true; }
   } catch (error) { notice(error.message, true); }
 }
+function updateLauncherFields() {
+  const style = controls.bubbleStyle.value;
+  $('bubble-icon-field').hidden = style === 'text';
+  $('bubble-label-field').hidden = style === 'icon';
+  controls.bubbleLabel.required = style !== 'icon';
+}
 function fillWidget() {
   const widget = state.widget;
   $('widget-name').value = widget.name;
   for (const key of configFields) controls[key].value = widget.config[key] ?? '';
+  updateLauncherFields();
   $('suggestions').value = (widget.config.suggestions || []).join('\n');
   $('allowed-origins').value = (widget.allowedOrigins || []).join('\n');
   $('accent-color').value = /^#[\da-f]{6}$/i.test(widget.config.accent) ? widget.config.accent : '#d06a4f';
@@ -291,6 +298,7 @@ function validateDraft(draft, publishing = false) {
   if (!draft.name) throw new Error('Give your widget a name.');
   if (draft.name.length > 80) throw new Error('Keep your widget name under 80 characters.');
   if (!draft.config.title.trim()) throw new Error('Add a chat title.');
+  if (draft.config.bubbleStyle !== 'icon' && !draft.config.bubbleLabel.trim()) throw new Error('Add launcher text, or choose Icon only.');
   if (!/^#[a-f\d]{6}$/i.test(draft.config.accent)) throw new Error('Use a six-digit hex color, such as #d06a4f.');
   if (draft.config.suggestions.length > 4) throw new Error('Use up to four conversation starters.');
   if (draft.config.suggestions.some(value => value.length > 120)) throw new Error('Keep each conversation starter under 120 characters.');
@@ -330,7 +338,7 @@ function onAppearanceChange() {
   $('editor-title').textContent = draft.name || 'Untitled widget';
   if (/^#[\da-f]{6}$/i.test(draft.config.accent)) $('accent-color').value = draft.config.accent;
   $('radius-value').textContent = `${draft.config.borderRadius} px`; $('width-value').textContent = `${draft.config.width} px`;
-  updateEditorState(); postPreviewConfig();
+  updateLauncherFields(); updateEditorState(); postPreviewConfig();
 }
 for (const input of document.querySelectorAll('#appearance-tab input, #appearance-tab textarea, #appearance-tab select, #allowed-origins')) input.addEventListener('input', onAppearanceChange);
 $('accent-color').addEventListener('input', () => { $('accent').value = $('accent-color').value; onAppearanceChange(); });

@@ -13,6 +13,8 @@ Each visitor can create a separate private workspace connected to their own Guml
 5. Save the draft, add the exact website origins where the widget should run, and publish.
 6. Copy the generated script tag into your website. Published design updates appear on subsequent widget loads without replacing the snippet.
 
+In Appearance, **Launcher style** controls the button that opens the chat: icon and text, icon only, or text only. Enter an emoji or symbol for a custom icon, or leave it blank for the built-in chat icon. Icon-only buttons keep an accessible name based on the chat title. Existing widgets keep their current icon-and-text launcher.
+
 Widget drafts and the published configuration are separate. Saving a draft does not change an installed widget. Publishing copies the saved draft and its origin list into the public configuration. Unpublishing disables public access.
 
 Agent editing is separate: **Save agent updates the real agent in Gumloop**. Its name, description, instructions, and model can affect every place that agent runs. Cosmetic preview changes do not write to Gumloop. Full connector, skill, and knowledge-source administration remains in Gumloop.

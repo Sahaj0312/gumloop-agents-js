@@ -1,5 +1,5 @@
 import { Gumloop } from '../../src/client.js';
-import { bad, hash, token, type WidgetConfig } from './common.js';
+import { bad, config, hash, token } from './common.js';
 
 export interface WorkspaceRow {
   id: string;
@@ -19,8 +19,8 @@ export interface WidgetRow {
 export function widgetJSON(row: WidgetRow) {
   return {
     id: row.id, name: row.name, agentId: row.agent_id, agentName: row.agent_name,
-    config: JSON.parse(row.config) as WidgetConfig,
-    publishedConfig: row.published_config ? JSON.parse(row.published_config) as WidgetConfig : null,
+    config: config(JSON.parse(row.config)),
+    publishedConfig: row.published_config ? config(JSON.parse(row.published_config)) : null,
     allowedOrigins: JSON.parse(row.allowed_origins), publishedOrigins: JSON.parse(row.published_origins),
     status: row.published_config ? 'published' : 'draft', version: row.version,
     publishedAt: row.published_at ? new Date(row.published_at).toISOString() : null,

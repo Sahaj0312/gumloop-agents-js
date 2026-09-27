@@ -82,6 +82,11 @@ test('widget cosmetics clamp numeric values and permit only anonymous HTTPS avat
   assert.equal(helpers.cleanConfig({ width: '500px', borderRadius: Infinity }).width, 384);
   assert.equal(helpers.cleanConfig({ width: '500px', borderRadius: Infinity }).borderRadius, 18);
   assert.equal(helpers.cleanConfig(null).title, 'Ask our team');
+  assert.equal(helpers.cleanConfig({}).bubbleStyle, 'icon-text');
+  assert.equal(helpers.cleanConfig({ bubbleStyle: 'unknown' }).bubbleStyle, 'icon-text');
+  assert.equal(helpers.cleanConfig({ bubbleStyle: 'icon', bubbleIcon: ' 👨‍👩‍👧‍👦 ' }).bubbleIcon, '👨‍👩‍👧‍👦');
+  assert.equal(helpers.cleanConfig({ bubbleIcon: 'x'.repeat(33) }).bubbleIcon, '');
+  assert.equal(helpers.cleanConfig({ bubbleIcon: '<img src=x>' }).bubbleIcon, '<img src=x>');
 });
 
 test('widget suggestions stay bounded literal text and ignore unrelated configuration', () => {
