@@ -1,6 +1,6 @@
 const $ = id => document.getElementById(id);
 const state = { agents: [], widgets: [], widget: null, agent: null, view: 'widgets', tab: 'appearance', csrf: null, dirty: false, agentDirty: false, saving: false, previewUrl: null, previewGeneration: 0, previewTimer: null, noticeTimer: null, workspace: null, account: null, connected: false, onboardingCode: null, workspaceGeneration: 0 };
-const configFields = ['title', 'welcome', 'accent', 'position', 'bubbleLabel', 'bubbleStyle', 'bubbleIcon', 'theme', 'borderRadius', 'width', 'avatarUrl'];
+const configFields = ['title', 'welcome', 'accent', 'position', 'bubbleLabel', 'bubbleStyle', 'bubbleIcon', 'theme', 'borderRadius', 'width'];
 const controls = Object.fromEntries(configFields.map(key => [key, document.querySelector(`[data-config="${key}"]`)]));
 const clone = value => JSON.parse(JSON.stringify(value));
 
@@ -301,10 +301,6 @@ function validateDraft(draft, publishing = false) {
   if (draft.config.suggestions.length > 4) throw new Error('Use up to four conversation starters.');
   if (draft.config.suggestions.some(value => value.length > 120)) throw new Error('Keep each conversation starter under 120 characters.');
   if (draft.allowedOrigins.length > 20) throw new Error('Use up to 20 website origins.');
-  if (draft.config.avatarUrl) {
-    try { const url = new URL(draft.config.avatarUrl); if (url.protocol !== 'https:' || url.username || url.password) throw new Error(); }
-    catch { throw new Error('Use an HTTPS URL for your avatar, or leave it blank.'); }
-  }
   if (publishing && !draft.allowedOrigins.length) throw new Error('Add at least one website in the Install tab before publishing.');
   for (const origin of draft.allowedOrigins) {
     try { const parsed = new URL(origin); if (!['https:', 'http:'].includes(parsed.protocol) || parsed.origin !== origin || origin.includes('*')) throw new Error(); }

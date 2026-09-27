@@ -8,7 +8,7 @@ Each visitor can create a separate private workspace connected to their own Guml
 
 1. Create a private workspace with your Gumloop personal API key and user ID, then save the generated workspace access code. To return, choose the existing-workspace option and enter that code. The original deployment owner can still use the original studio password.
 2. Pick an accessible agent and create a widget.
-3. Customize its title, welcome message, color, theme, avatar, suggested questions, size, and placement.
+3. Customize its title, welcome message, color, theme, launcher, suggested questions, size, and placement.
 4. Test the actual widget in the interactive preview. Desktop and mobile controls change the preview viewport. Real preview conversations consume Gumloop credits.
 5. Save the draft, add the exact website origins where the widget should run, and publish.
 6. Copy the generated script tag into your website. Published design updates appear on subsequent widget loads without replacing the snippet.
